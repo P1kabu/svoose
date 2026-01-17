@@ -101,11 +101,15 @@ export function observe(options: ObserveOptions = {}): () => void {
     if (buffer.length === 0) return;
 
     const events = buffer.splice(0, buffer.length);
-    transport.send(events).catch((err) => {
-      if (config.debug) {
-        console.error('[svoose] transport error:', err);
-      }
-    });
+    // Handle both Promise and non-Promise returns from transport.send()
+    const result = transport.send(events);
+    if (result && typeof result.catch === 'function') {
+      result.catch((err) => {
+        if (config.debug) {
+          console.error('[svoose] transport error:', err);
+        }
+      });
+    }
   };
 
   // Convert metric to vital event

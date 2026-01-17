@@ -107,6 +107,7 @@ export function observeFID(callback: (metric: Metric) => void): () => void {
     if (entry) {
       const value = entry.processingStart - entry.startTime;
       callback(createMetric('FID', value));
+      observer.disconnect();
     }
   });
 
@@ -171,6 +172,7 @@ export function observeTTFB(callback: (metric: Metric) => void): () => void {
     if (entry) {
       const value = entry.responseStart - entry.requestStart;
       callback(createMetric('TTFB', value));
+      observer.disconnect();
     }
   });
 

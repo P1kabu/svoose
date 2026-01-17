@@ -81,7 +81,8 @@ export type ObserveEvent = VitalEvent | ObserveErrorEvent | TransitionEvent;
 // ============================================
 
 export interface Transport {
-  send(events: ObserveEvent[]): Promise<void>;
+  /** Send events to backend. Can return Promise or void for sync transports. */
+  send(events: ObserveEvent[]): Promise<void> | void;
 }
 
 export interface TransportOptions {
