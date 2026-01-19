@@ -9,7 +9,7 @@ Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree
 - **Web Vitals** — CLS, LCP, FID, INP, FCP, TTFB (no external deps)
 - **Error Tracking** — global errors + unhandled rejections
 - **State Machines** — minimal FSM with TypeScript inference
-- **Svelte 5** — works with runes ($state)
+- **Svelte 5 Native** — reactive `useMachine()` hook with $state runes
 - **Tree-shakeable** — pay only for what you use
 
 ## Installation
@@ -222,9 +222,9 @@ const myTransport = {
 
 | Import | Size (gzip) |
 |--------|-------------|
-| Full bundle | ~2.9 KB |
+| Full bundle | ~3.0 KB |
 | `observe()` only | ~2.1 KB |
-| `createMachine()` only | ~0.7 KB |
+| `createMachine()` only | ~0.8 KB |
 
 ## TypeScript
 
@@ -276,22 +276,16 @@ auth.send('INVALID');     // ✗ TypeScript error
 
 ## Svelte 5 Usage
 
+### Reactive State Machines (Recommended)
+
+Use `useMachine()` from `svoose/svelte` for automatic reactivity:
+
 ```svelte
 <script lang="ts">
-  import { observe, createMachine } from 'svoose';
-  import { onMount, onDestroy } from 'svelte';
+  import { useMachine } from 'svoose/svelte';
 
-  // Start observing
-  let cleanup: (() => void) | null = null;
-
-  onMount(() => {
-    cleanup = observe({ endpoint: '/api/metrics' });
-  });
-
-  onDestroy(() => cleanup?.());
-
-  // State machine
-  const toggle = createMachine({
+  // State machine with automatic Svelte 5 reactivity
+  const toggle = useMachine({
     id: 'toggle',
     initial: 'off',
     states: {
@@ -299,6 +293,9 @@ auth.send('INVALID');     // ✗ TypeScript error
       on: { on: { TOGGLE: 'off' } },
     },
   });
+
+  // toggle.state and toggle.context are reactive!
+  // Changes automatically trigger re-renders
 </script>
 
 <button onclick={() => toggle.send('TOGGLE')}>
@@ -310,11 +307,74 @@ auth.send('INVALID');     // ✗ TypeScript error
 {/if}
 ```
 
+### With Observability
+
+```svelte
+<script lang="ts">
+  import { observe } from 'svoose';
+  import { useMachine } from 'svoose/svelte';
+  import { onMount, onDestroy } from 'svelte';
+
+  // Start observing
+  let cleanup: (() => void) | null = null;
+
+  onMount(() => {
+    cleanup = observe({ endpoint: '/api/metrics' });
+  });
+
+  onDestroy(() => cleanup?.());
+
+  // Reactive machine with observation
+  const auth = useMachine({
+    id: 'auth',
+    initial: 'idle',
+    context: { user: null },
+    observe: true, // Track transitions
+    states: {
+      idle: { on: { LOGIN: 'loading' } },
+      loading: {
+        on: {
+          SUCCESS: {
+            target: 'authenticated',
+            action: (ctx, e) => ({ user: e.user }),
+          },
+          ERROR: 'idle',
+        },
+      },
+      authenticated: { on: { LOGOUT: 'idle' } },
+    },
+  });
+</script>
+
+<p>Status: {auth.state}</p>
+<p>User: {auth.context.user?.name ?? 'Not logged in'}</p>
+```
+
+### Non-Reactive Usage
+
+For non-reactive scenarios (outside components, vanilla JS), use `createMachine()`:
+
+```typescript
+import { createMachine } from 'svoose';
+
+const machine = createMachine({
+  id: 'toggle',
+  initial: 'off',
+  states: {
+    off: { on: { TOGGLE: 'on' } },
+    on: { on: { TOGGLE: 'off' } },
+  },
+});
+```
+
 ## Roadmap
 
-- **v0.2** — `invoke()`, `spawn()`, `after()` (delayed transitions)
-- **v0.3** — Parallel states, history states, devtools
-- **v0.4** — svelte-reactor integration, SvelteKit hooks
+- **v0.2** — Enhanced Observability (custom metrics, retry logic, network awareness)
+- **v0.3** — SvelteKit Integration (hooks, route tracking, SSR safety)
+- **v0.4** — Developer Experience (devtools, transition history, visualization)
+- **v0.5** — Core FSM Enhancements (`invoke()`, `after()`, `always()`)
+
+See [ROADMAP.md](./ROADMAP.md) for detailed plans.
 
 ## License
 
