@@ -37,7 +37,16 @@ export function createMachine<
   TState extends string,
   TEvent extends EventObject
 >(config: MachineConfig<TContext, TState, TEvent>): Machine<TContext, TState, TEvent> {
-  // Internal state - in Svelte 5 .svelte.ts files, these become reactive
+  // Validate initial state exists
+  if (!(config.initial in config.states)) {
+    throw new Error(
+      `[svoose] Invalid initial state "${config.initial}" for machine "${config.id}". ` +
+        `Available states: ${Object.keys(config.states).join(', ')}`
+    );
+  }
+
+  // Internal state
+  // For Svelte 5 reactivity, use useMachine() from 'svoose/svelte'
   let _state: TState = config.initial;
   let _context: TContext = config.context ? { ...config.context } : ({} as TContext);
 
@@ -52,12 +61,16 @@ export function createMachine<
   // Register for error context tracking
   registerMachineContext(config.id, () => _state);
 
-  // Run entry action for initial state
+  // Run entry action for initial state (with error handling)
   const initialState = config.states[config.initial];
   if (initialState?.entry) {
-    const update = initialState.entry(_context);
-    if (update) {
-      Object.assign(_context, update);
+    try {
+      const update = initialState.entry(_context);
+      if (update) {
+        _context = { ..._context, ...update };
+      }
+    } catch (err) {
+      console.error(`[svoose] Error in entry action for initial state "${config.initial}":`, err);
     }
   }
 
@@ -114,45 +127,62 @@ export function createMachine<
     const targetState: TState =
       typeof transition === 'string' ? transition : transition.target;
 
-    // Check guard
+    // Check guard (with error handling)
     if (typeof transition === 'object' && transition.guard) {
-      if (
-        !transition.guard(
-          _context,
-          eventObj as Extract<TEvent, { type: (typeof eventObj)['type'] }>
-        )
-      ) {
-        return;
+      try {
+        if (
+          !transition.guard(
+            _context,
+            eventObj as Extract<TEvent, { type: (typeof eventObj)['type'] }>
+          )
+        ) {
+          return;
+        }
+      } catch (err) {
+        console.error(`[svoose] Error in guard for event "${eventObj.type}":`, err);
+        return; // Don't transition if guard throws
       }
     }
 
     const prevState = _state;
 
-    // Run exit action
+    // Run exit action (with error handling)
     if (stateConfig.exit) {
-      stateConfig.exit(_context);
+      try {
+        stateConfig.exit(_context);
+      } catch (err) {
+        console.error(`[svoose] Error in exit action for state "${_state}":`, err);
+      }
     }
 
-    // Run transition action
+    // Run transition action (with error handling)
     if (typeof transition === 'object' && transition.action) {
-      const update = transition.action(
-        _context,
-        eventObj as Extract<TEvent, { type: (typeof eventObj)['type'] }>
-      );
-      if (update) {
-        Object.assign(_context, update);
+      try {
+        const update = transition.action(
+          _context,
+          eventObj as Extract<TEvent, { type: (typeof eventObj)['type'] }>
+        );
+        if (update) {
+          _context = { ..._context, ...update };
+        }
+      } catch (err) {
+        console.error(`[svoose] Error in action for event "${eventObj.type}":`, err);
       }
     }
 
     // Update state
     _state = targetState;
 
-    // Run entry action for new state
+    // Run entry action for new state (with error handling)
     const newStateConfig = config.states[_state];
     if (newStateConfig?.entry) {
-      const update = newStateConfig.entry(_context);
-      if (update) {
-        Object.assign(_context, update);
+      try {
+        const update = newStateConfig.entry(_context);
+        if (update) {
+          _context = { ..._context, ...update };
+        }
+      } catch (err) {
+        console.error(`[svoose] Error in entry action for state "${_state}":`, err);
       }
     }
 

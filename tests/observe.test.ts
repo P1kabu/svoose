@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { observe } from '../src/observe/observe.svelte.js';
-import type { Transport, ObserveEvent, VitalEvent } from '../src/types/index.js';
+import { observe, setGlobalObserver, getGlobalObserver } from '../src/observe/observe.svelte.js';
+import { createMachine } from '../src/machine/index.js';
+import type { Transport, ObserveEvent, VitalEvent, TransitionEvent } from '../src/types/index.js';
 
 // Mock PerformanceObserver to prevent actual vital observation
 class MockPerformanceObserver {
@@ -266,6 +267,309 @@ describe('observe', () => {
 
       // Buffer is empty so no send
       expect(sendSpy).not.toHaveBeenCalled();
+
+      cleanup();
+    });
+  });
+
+  describe('visibility change handling', () => {
+    it('should flush on visibility change to hidden', () => {
+      const sentBatches: ObserveEvent[][] = [];
+      const transport: Transport = {
+        send: (events) => {
+          sentBatches.push([...events]);
+        },
+      };
+
+      // Add events via global observer
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+      });
+
+      // Get the global observer and send events
+      const observer = getGlobalObserver();
+      expect(observer).not.toBeNull();
+
+      // Simulate some events
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      // Simulate visibility change
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'hidden',
+        writable: true,
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(sentBatches.length).toBeGreaterThan(0);
+
+      // Reset visibility state
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        writable: true,
+        configurable: true,
+      });
+
+      cleanup();
+    });
+  });
+
+  describe('beforeunload handling', () => {
+    it('should flush on beforeunload', () => {
+      const sentBatches: ObserveEvent[][] = [];
+      const transport: Transport = {
+        send: (events) => {
+          sentBatches.push([...events]);
+        },
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+      });
+
+      // Get the global observer and send events
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      // Simulate beforeunload
+      window.dispatchEvent(new Event('beforeunload'));
+
+      expect(sentBatches.length).toBeGreaterThan(0);
+
+      cleanup();
+    });
+  });
+
+  describe('global observer', () => {
+    it('should set and get global observer', () => {
+      const callback = vi.fn();
+      setGlobalObserver(callback);
+
+      expect(getGlobalObserver()).toBe(callback);
+
+      setGlobalObserver(null);
+      expect(getGlobalObserver()).toBeNull();
+    });
+
+    it('should clear global observer on cleanup', () => {
+      const cleanup = observe({
+        vitals: false,
+        errors: false,
+      });
+
+      expect(getGlobalObserver()).not.toBeNull();
+
+      cleanup();
+
+      expect(getGlobalObserver()).toBeNull();
+    });
+  });
+
+  describe('machine integration', () => {
+    it('should receive transition events from machine', () => {
+      const sentEvents: ObserveEvent[] = [];
+      const transport: Transport = {
+        send: (events) => {
+          sentEvents.push(...events);
+        },
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 1, // Flush immediately
+      });
+
+      const machine = createMachine({
+        id: 'test-machine',
+        initial: 'idle',
+        observe: true,
+        states: {
+          idle: { on: { START: 'running' } },
+          running: { on: { STOP: 'idle' } },
+        },
+      });
+
+      machine.send('START');
+
+      expect(sentEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'transition',
+          machineId: 'test-machine',
+          from: 'idle',
+          to: 'running',
+          event: 'START',
+        })
+      );
+
+      machine.destroy();
+      cleanup();
+    });
+
+    it('should include context in transition events when configured', () => {
+      const sentEvents: ObserveEvent[] = [];
+      const transport: Transport = {
+        send: (events) => {
+          sentEvents.push(...events);
+        },
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 1,
+      });
+
+      const machine = createMachine({
+        id: 'counter',
+        initial: 'active',
+        context: { count: 0 },
+        observe: { transitions: true, context: true },
+        states: {
+          active: {
+            on: {
+              INCREMENT: {
+                target: 'active',
+                action: (ctx) => ({ count: ctx.count + 1 }),
+              },
+            },
+          },
+        },
+      });
+
+      machine.send('INCREMENT');
+
+      const transitionEvent = sentEvents.find(
+        (e) => e.type === 'transition'
+      ) as TransitionEvent;
+
+      expect(transitionEvent).toBeDefined();
+      expect(transitionEvent.context).toEqual({ count: 1 });
+
+      machine.destroy();
+      cleanup();
+    });
+  });
+
+  describe('multiple observers', () => {
+    it('should handle multiple observe() calls', () => {
+      const sent1: ObserveEvent[][] = [];
+      const sent2: ObserveEvent[][] = [];
+
+      const transport1: Transport = {
+        send: (events) => sent1.push([...events]),
+      };
+      const transport2: Transport = {
+        send: (events) => sent2.push([...events]),
+      };
+
+      const cleanup1 = observe({
+        transport: transport1,
+        vitals: false,
+        errors: false,
+      });
+
+      // Second observe() replaces the global observer
+      const cleanup2 = observe({
+        transport: transport2,
+        vitals: false,
+        errors: false,
+      });
+
+      // Only the second observer receives events
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      cleanup2();
+      cleanup1();
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should handle empty filter function gracefully', () => {
+      const sentEvents: ObserveEvent[] = [];
+      const transport: Transport = {
+        send: (events) => sentEvents.push(...events),
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        filter: () => false, // Filter out all events
+        batchSize: 1,
+      });
+
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      // Event should be filtered out
+      expect(sentEvents).toHaveLength(0);
+
+      cleanup();
+    });
+
+    it('should handle transport that returns undefined', () => {
+      const transport: Transport = {
+        send: () => undefined as unknown as void,
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 1,
+      });
+
+      const observer = getGlobalObserver();
+
+      // Should not throw
+      expect(() => {
+        observer!({
+          type: 'transition',
+          machineId: 'test',
+          from: 'a',
+          to: 'b',
+          event: 'NEXT',
+          timestamp: Date.now(),
+        });
+      }).not.toThrow();
 
       cleanup();
     });

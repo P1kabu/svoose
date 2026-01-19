@@ -423,3 +423,317 @@ describe('createEvent', () => {
     expect(event).toEqual({ type: 'SET', value: 42 });
   });
 });
+
+describe('edge cases and error handling', () => {
+  it('should throw on invalid initial state', () => {
+    expect(() => {
+      createMachine({
+        id: 'invalid',
+        initial: 'nonexistent' as 'off',
+        states: {
+          off: { on: { TOGGLE: 'on' } },
+          on: { on: { TOGGLE: 'off' } },
+        },
+      });
+    }).toThrow(/Invalid initial state/);
+  });
+
+  it('should handle guard that throws exception', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const machine = createMachine({
+      id: 'guard-error',
+      initial: 'idle',
+      context: { count: 0 },
+      states: {
+        idle: {
+          on: {
+            NEXT: {
+              target: 'active',
+              guard: () => {
+                throw new Error('Guard error');
+              },
+            },
+          },
+        },
+        active: {},
+      },
+    });
+
+    // Should not transition when guard throws
+    machine.send('NEXT');
+    expect(machine.state).toBe('idle');
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Error in guard'),
+      expect.any(Error)
+    );
+
+    machine.destroy();
+    errorSpy.mockRestore();
+  });
+
+  it('should handle entry action that throws exception', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const machine = createMachine({
+      id: 'entry-error',
+      initial: 'idle',
+      states: {
+        idle: {
+          on: { START: 'running' },
+        },
+        running: {
+          entry: () => {
+            throw new Error('Entry error');
+          },
+          on: { STOP: 'idle' },
+        },
+      },
+    });
+
+    // Should still transition even if entry throws
+    machine.send('START');
+    expect(machine.state).toBe('running');
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Error in entry action'),
+      expect.any(Error)
+    );
+
+    machine.destroy();
+    errorSpy.mockRestore();
+  });
+
+  it('should handle exit action that throws exception', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const machine = createMachine({
+      id: 'exit-error',
+      initial: 'idle',
+      states: {
+        idle: {
+          exit: () => {
+            throw new Error('Exit error');
+          },
+          on: { START: 'running' },
+        },
+        running: {
+          on: { STOP: 'idle' },
+        },
+      },
+    });
+
+    // Should still transition even if exit throws
+    machine.send('START');
+    expect(machine.state).toBe('running');
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Error in exit action'),
+      expect.any(Error)
+    );
+
+    machine.destroy();
+    errorSpy.mockRestore();
+  });
+
+  it('should handle transition action that throws exception', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const machine = createMachine({
+      id: 'action-error',
+      initial: 'idle',
+      context: { value: 0 },
+      states: {
+        idle: {
+          on: {
+            UPDATE: {
+              target: 'idle',
+              action: () => {
+                throw new Error('Action error');
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Should still complete transition even if action throws
+    machine.send('UPDATE');
+    expect(machine.state).toBe('idle');
+    expect(machine.context.value).toBe(0); // Context not updated due to error
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Error in action'),
+      expect.any(Error)
+    );
+
+    machine.destroy();
+    errorSpy.mockRestore();
+  });
+
+  it('should handle initial entry action that throws exception', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const machine = createMachine({
+      id: 'initial-entry-error',
+      initial: 'idle',
+      context: { initialized: false },
+      states: {
+        idle: {
+          entry: () => {
+            throw new Error('Initial entry error');
+          },
+        },
+      },
+    });
+
+    // Machine should still be created
+    expect(machine.state).toBe('idle');
+    expect(machine.context.initialized).toBe(false);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Error in entry action for initial state'),
+      expect.any(Error)
+    );
+
+    machine.destroy();
+    errorSpy.mockRestore();
+  });
+
+  it('should handle self-transition correctly', () => {
+    const entryFn = vi.fn();
+    const exitFn = vi.fn();
+
+    const machine = createMachine({
+      id: 'self-transition',
+      initial: 'active',
+      context: { count: 0 },
+      states: {
+        active: {
+          entry: entryFn,
+          exit: exitFn,
+          on: {
+            INCREMENT: {
+              target: 'active',
+              action: (ctx) => ({ count: ctx.count + 1 }),
+            },
+          },
+        },
+      },
+    });
+
+    // Entry called once on init
+    expect(entryFn).toHaveBeenCalledTimes(1);
+    expect(exitFn).not.toHaveBeenCalled();
+
+    // Self-transition should call both exit and entry
+    machine.send('INCREMENT');
+    expect(machine.context.count).toBe(1);
+    expect(exitFn).toHaveBeenCalledTimes(1);
+    expect(entryFn).toHaveBeenCalledTimes(2);
+
+    machine.send('INCREMENT');
+    expect(machine.context.count).toBe(2);
+    expect(exitFn).toHaveBeenCalledTimes(2);
+    expect(entryFn).toHaveBeenCalledTimes(3);
+
+    machine.destroy();
+  });
+
+  it('should handle multiple rapid transitions', () => {
+    const machine = createMachine({
+      id: 'rapid',
+      initial: 'a',
+      context: { transitions: 0 },
+      states: {
+        a: {
+          on: {
+            NEXT: {
+              target: 'b',
+              action: (ctx) => ({ transitions: ctx.transitions + 1 }),
+            },
+          },
+        },
+        b: {
+          on: {
+            NEXT: {
+              target: 'c',
+              action: (ctx) => ({ transitions: ctx.transitions + 1 }),
+            },
+          },
+        },
+        c: {
+          on: {
+            NEXT: {
+              target: 'a',
+              action: (ctx) => ({ transitions: ctx.transitions + 1 }),
+            },
+          },
+        },
+      },
+    });
+
+    // Rapid transitions
+    for (let i = 0; i < 100; i++) {
+      machine.send('NEXT');
+    }
+
+    expect(machine.context.transitions).toBe(100);
+    // 100 transitions: a->b->c->a->... cycles
+    // 100 % 3 = 1, so we end up at 'b'
+    expect(machine.state).toBe('b');
+
+    machine.destroy();
+  });
+
+  it('should handle event with no handler gracefully', () => {
+    const machine = createMachine({
+      id: 'no-handler',
+      initial: 'idle',
+      states: {
+        idle: {}, // No event handlers
+      },
+    });
+
+    // Should not throw
+    machine.send('UNKNOWN' as never);
+    expect(machine.state).toBe('idle');
+
+    machine.destroy();
+  });
+
+  it('should maintain state consistency after errors', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    let shouldThrow = true;
+
+    const machine = createMachine({
+      id: 'consistency',
+      initial: 'idle',
+      context: { value: 0 },
+      states: {
+        idle: {
+          on: {
+            UPDATE: {
+              target: 'idle',
+              action: (ctx) => {
+                if (shouldThrow) {
+                  throw new Error('Conditional error');
+                }
+                return { value: ctx.value + 1 };
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // First update fails
+    machine.send('UPDATE');
+    expect(machine.context.value).toBe(0);
+
+    // Second update succeeds
+    shouldThrow = false;
+    machine.send('UPDATE');
+    expect(machine.context.value).toBe(1);
+
+    machine.destroy();
+    errorSpy.mockRestore();
+  });
+});

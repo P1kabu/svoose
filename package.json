@@ -1,6 +1,6 @@
 {
   "name": "svoose",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Observability + State Machines for Svelte 5 — the goose that sees everything",
   "type": "module",
   "main": "./dist/index.js",
@@ -10,6 +10,11 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte/index.svelte.d.ts",
+      "svelte": "./dist/svelte/index.svelte.js",
+      "import": "./dist/svelte/index.svelte.js"
     },
     "./transport": {
       "types": "./dist/transport/index.d.ts",
