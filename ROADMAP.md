@@ -40,11 +40,17 @@
 
 | Функція | Опис | Статус |
 |---------|------|--------|
+| **Typed Metrics API** | Типізовані користувацькі метрики з autocomplete | ⬜ Todo |
 | Custom Metrics API | Користувацькі метрики з batching | ⬜ Todo |
+| **Sampling** | Відправляти лише % подій (production optimization) | ⬜ Todo |
+| **Session Tracking** | Автоматичний sessionId для групування подій | ⬜ Todo |
+| **User Identification** | Опціональний userId для аналітики | ⬜ Todo |
 | Retry Logic | Exponential backoff для транспорту | ⬜ Todo |
+| **sendBeacon Transport** | Надійна відправка при закритті сторінки | ⬜ Todo |
 | Multiple Machine Context | Всі машини в error context | ⬜ Todo |
 | Network Status Awareness | Pause/resume на offline | ⬜ Todo |
 | Dead Letter Queue | Збереження failed events | ⬜ Todo |
+| **Privacy Utilities** | PII scrubbing, data sanitization | ⬜ Todo |
 
 #### API Design
 
@@ -61,6 +67,23 @@ observe({
 // Emit custom metric anywhere in your app
 metric('checkout_started', { step: 1, cartTotal: 99.99 });
 metric('feature_used', { name: 'dark_mode', enabled: true });
+
+// ✨ NEW: Typed Metrics API (повний autocomplete)
+import { createTypedMetric } from 'svoose';
+
+// Визначте всі ваші метрики з типами
+type AppMetrics = {
+  checkout_started: { step: number; cartTotal: number };
+  feature_used: { name: string; enabled: boolean };
+  search_performed: { query: string; resultsCount: number };
+  error_boundary_hit: { componentName: string; error: string };
+};
+
+const metric = createTypedMetric<AppMetrics>();
+
+metric('checkout_started', { step: 1, cartTotal: 99.99 }); // ✅ autocomplete працює
+metric('checkout_started', { wrong: 'field' });            // ❌ TypeScript error
+metric('unknown_metric', {});                               // ❌ TypeScript error
 
 // Or use callback style in observe()
 observe({
@@ -113,16 +136,160 @@ observe({
 });
 ```
 
+```typescript
+// ✨ NEW: Sampling — критично для high-traffic сайтів
+observe({
+  endpoint: '/api/metrics',
+  vitals: true,
+  errors: true,
+
+  sampling: {
+    // Відправляти лише 10% vitals (економія bandwidth)
+    vitals: 0.1,
+    // Але всі помилки важливі!
+    errors: 1.0,
+    // Custom метрики — 50%
+    custom: 0.5,
+  },
+
+  // Або простий варіант — однаковий % для всіх
+  // sampling: 0.1, // 10% всіх подій
+});
+```
+
+```typescript
+// ✨ NEW: Session & User Tracking
+observe({
+  endpoint: '/api/metrics',
+
+  // Автоматичний sessionId (генерується при завантаженні сторінки)
+  session: true,
+
+  // Або з кастомною конфігурацією
+  session: {
+    // Час неактивності до нової сесії (default: 30 хвилин)
+    timeout: 30 * 60 * 1000,
+    // Зберігати між вкладками
+    crossTab: true,
+    // Storage для sessionId
+    storage: 'sessionStorage', // or 'localStorage' | 'memory'
+  },
+
+  // Опціональна ідентифікація користувача
+  user: {
+    id: 'user_123',           // Ваш user ID
+    traits: {                 // Опціональні атрибути
+      plan: 'premium',
+      signupDate: '2024-01-15',
+    },
+  },
+});
+
+// Або динамічно встановити користувача пізніше
+import { identify } from 'svoose';
+
+identify({
+  id: 'user_456',
+  traits: { plan: 'free' },
+});
+
+// Скинути при logout
+identify(null);
+```
+
+```typescript
+// ✨ NEW: sendBeacon Transport — надійна відправка при закритті сторінки
+import { createBeaconTransport } from 'svoose/transport';
+
+observe({
+  endpoint: '/api/metrics',
+
+  // Автоматично використовує sendBeacon при unload
+  transport: createBeaconTransport('/api/metrics', {
+    // Fallback до fetch якщо beacon недоступний
+    fallback: 'fetch',
+    // Максимальний розмір payload (beacon має ліміт ~64KB)
+    maxPayloadSize: 60000,
+  }),
+});
+
+// Або комбінований транспорт
+import { createHybridTransport } from 'svoose/transport';
+
+observe({
+  transport: createHybridTransport('/api/metrics', {
+    // Використовувати fetch для звичайних подій
+    default: 'fetch',
+    // Але beacon для подій при закритті сторінки
+    onUnload: 'beacon',
+    // Retry конфігурація для fetch
+    retry: { attempts: 3, backoff: 'exponential' },
+  }),
+});
+```
+
+```typescript
+// ✨ NEW: Privacy Utilities — GDPR/CCPA compliance
+import { observe, configurePII } from 'svoose';
+
+// Глобальна конфігурація PII scrubbing
+configurePII({
+  // Автоматично видаляти з URL
+  scrubFromUrl: [
+    'email',
+    'token',
+    'password',
+    'api_key',
+    /user_id=\d+/,  // Regex patterns
+  ],
+
+  // Маскувати в custom метриках
+  maskFields: ['email', 'phone', 'creditCard'],
+
+  // Кастомний sanitizer
+  sanitize: (event) => {
+    if (event.metadata?.email) {
+      event.metadata.email = '[REDACTED]';
+    }
+    return event;
+  },
+});
+
+observe({
+  endpoint: '/api/metrics',
+  vitals: true,
+
+  // Privacy режим для конкретного observe
+  privacy: {
+    // Не відправляти повний URL (тільки pathname)
+    stripQueryParams: true,
+    // Не включати user-agent
+    excludeUserAgent: true,
+    // Хешувати IP на сервері
+    hashIP: true,
+  },
+});
+```
+
 #### Технічні задачі
 
 - [ ] Рефакторинг `observe.svelte.ts` для extensibility
 - [ ] Додати `metric()` функцію в exports
+- [ ] **Імплементувати `createTypedMetric<T>()` з generic типами**
+- [ ] **Sampling engine з per-event-type конфігурацією**
+- [ ] **Session manager (generation, timeout, cross-tab sync)**
+- [ ] **User identification API (`identify()` function)**
 - [ ] Імплементувати retry queue в transport
+- [ ] **`createBeaconTransport()` з fallback логікою**
+- [ ] **`createHybridTransport()` для fetch + beacon**
 - [ ] Network status detection (navigator.onLine + events)
 - [ ] LocalStorage adapter для offline events
+- [ ] **PII scrubbing utilities (`configurePII()`)**
+- [ ] **Privacy options в observe config**
 - [ ] Оновити всі error contexts для multiple machines
-- [ ] +30 нових тестів
+- [ ] +50 нових тестів (sampling, session, privacy, beacon)
 - [ ] Оновити README з новими API
+- [ ] **Приклад: "Production Setup" guide**
 
 #### Breaking Changes
 
@@ -145,10 +312,13 @@ observe({
 | Функція | Опис | Статус |
 |---------|------|--------|
 | `svoose/sveltekit` entry | Новий entry point | ⬜ Todo |
+| **Vite Plugin** | Автоматична інструментація load() без обгорток | ⬜ Todo |
 | Server Hooks | handle(), handleError() | ⬜ Todo |
 | Route Tracking | Автоматичний page view tracking | ⬜ Todo |
+| **Soft Navigation Tracking** | SPA navigation з Core Web Vitals | ⬜ Todo |
 | SSR Safety | Graceful server-side handling | ⬜ Todo |
 | Load Function Tracking | Track load() performance | ⬜ Todo |
+| **Attribution API** | Визначення джерела проблем (LCP element, CLS source) | ⬜ Todo |
 
 #### API Design
 
@@ -227,16 +397,133 @@ export const load = trackLoad(async ({ fetch, params }) => {
 // - Success/failure
 ```
 
+```typescript
+// ✨ NEW: Vite Plugin — Zero-config автоматична інструментація
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { svoosePlugin } from 'svoose/vite';
+
+export default defineConfig({
+  plugins: [
+    sveltekit(),
+    svoosePlugin({
+      // Автоматично обгортає всі load() функції
+      autoInstrumentLoad: true,
+
+      // Автоматично додає observe() в +layout.svelte
+      autoInit: {
+        endpoint: '/api/metrics',
+        vitals: true,
+        errors: true,
+      },
+
+      // Виключити певні роути з tracking
+      exclude: ['/admin/*', '/internal/*'],
+
+      // Включити source maps для error tracking
+      sourceMaps: true,
+    }),
+  ],
+});
+
+// Тепер НЕ потрібно обгортати кожен load() вручну!
+// +page.ts — звичайний код, svoose інструментує автоматично
+export const load = async ({ fetch, params }) => {
+  const data = await fetch(`/api/posts/${params.id}`);
+  return { post: await data.json() };
+};
+```
+
+```typescript
+// ✨ NEW: Attribution API — зрозуміти ЧОМУ метрика погана
+import { observe } from 'svoose/sveltekit';
+
+observe({
+  endpoint: '/api/metrics',
+  vitals: {
+    enabled: true,
+    // Включити детальну атрибуцію
+    attribution: true,
+  },
+});
+
+// Тепер vitals включають attribution data:
+// {
+//   type: 'vital',
+//   name: 'LCP',
+//   value: 2500,
+//   rating: 'needs-improvement',
+//   attribution: {
+//     element: 'img#hero-image',           // Який елемент викликав LCP
+//     url: 'https://example.com/hero.jpg', // URL ресурсу
+//     resourceLoadTime: 1200,              // Час завантаження
+//     renderDelay: 300,                    // Затримка рендерингу
+//   }
+// }
+
+// Для CLS:
+// {
+//   type: 'vital',
+//   name: 'CLS',
+//   value: 0.15,
+//   attribution: {
+//     largestShiftSource: 'div.ad-banner', // Елемент що зсунувся найбільше
+//     largestShiftTime: 1500,              // Коли стався зсув
+//     loadState: 'dom-content-loaded',     // Стан сторінки
+//   }
+// }
+
+// Для INP:
+// {
+//   type: 'vital',
+//   name: 'INP',
+//   value: 350,
+//   attribution: {
+//     interactionTarget: 'button#submit',  // На що клікнули
+//     interactionType: 'pointer',          // Тип взаємодії
+//     inputDelay: 50,                      // Затримка до обробки
+//     processingDuration: 200,             // Час обробки
+//     presentationDelay: 100,              // Затримка відображення
+//   }
+// }
+```
+
+```typescript
+// ✨ NEW: Soft Navigation Tracking — SPA navigation metrics
+import { createClientHooks } from 'svoose/sveltekit';
+
+export const { init } = createClientHooks({
+  endpoint: '/api/metrics',
+
+  navigation: {
+    enabled: true,
+    // Трекати soft navigations як окремі "page views"
+    softNavigations: true,
+    // Core Web Vitals для кожної soft navigation
+    softNavVitals: ['LCP', 'CLS', 'INP'],
+  },
+});
+
+// Результат: отримуєте Web Vitals не тільки для initial load,
+// але й для кожного переходу між сторінками в SPA
+```
+
 #### Технічні задачі
 
 - [ ] Створити `src/sveltekit/` директорію
+- [ ] **Vite plugin (`svoose/vite`) з AST transformation**
+- [ ] **Auto-instrumentation для load() функцій**
 - [ ] Server hooks implementation
 - [ ] Client hooks implementation
 - [ ] Navigation tracking з `beforeNavigate`/`afterNavigate`
-- [ ] `trackLoad()` wrapper
+- [ ] **Soft navigation detection та metrics reset**
+- [ ] `trackLoad()` wrapper (для manual usage)
+- [ ] **Attribution API integration з web-vitals/attribution**
 - [ ] SSR detection та graceful handling
-- [ ] +20 нових тестів (потребує SvelteKit test setup)
+- [ ] +30 нових тестів (потребує SvelteKit test setup)
 - [ ] Документація: SvelteKit Quick Start guide
+- [ ] **Документація: Vite Plugin configuration**
 - [ ] Example SvelteKit project
 
 #### Breaking Changes
@@ -384,26 +671,47 @@ replayMachine.replay(events);
 
 ---
 
-### 📋 v0.5.0 — Core FSM Enhancements
+### 📋 v0.5.0 — Advanced FSM (Separate Entry Point)
 
 **Статус**: Планується
 **Пріоритет**: Середній
 **Цільова дата**: Q4 2026
 
+> ⚠️ **Архітектурне рішення**: Advanced FSM функції виносяться в окремий entry point
+> `svoose/machine` щоб зберегти core bundle малим. Базовий `createMachine()` залишається
+> в основному bundle (~0.8KB), а advanced features додають ~1KB окремо.
+
 #### Нові функції
 
 | Функція | Опис | Статус |
 |---------|------|--------|
+| `svoose/machine` entry | Окремий entry для advanced FSM | ⬜ Todo |
 | `invoke()` | Async operations в станах | ⬜ Todo |
 | `after()` | Delayed transitions | ⬜ Todo |
 | `always()` | Transient transitions | ⬜ Todo |
+| **`spawn()`** | Динамічне створення child machines | ⬜ Todo |
 | Enhanced Types | Краща type inference | ⬜ Todo |
 
 #### API Design
 
 ```typescript
+// ✨ Окремий import для advanced features (tree-shakeable)
+// Базовий createMachine залишається в 'svoose'
+import { createMachine } from 'svoose';  // ~0.8KB — basic FSM
+
+// Advanced features — окремий entry point
+import { createAdvancedMachine } from 'svoose/machine';  // +~1KB
+
+// Або selective imports для максимального tree-shaking
+import { withInvoke, withAfter, withAlways } from 'svoose/machine';
+
+const basicMachine = createMachine({ /* ... */ });  // Базовий — без invoke/after
+const advancedMachine = createAdvancedMachine({ /* ... */ });  // Повний функціонал
+```
+
+```typescript
 // invoke() - Async operations
-const fetchMachine = createMachine({
+const fetchMachine = createAdvancedMachine({
   id: 'fetch',
   initial: 'idle',
   context: { data: null, error: null },
@@ -443,7 +751,7 @@ const fetchMachine = createMachine({
 
 ```typescript
 // after() - Delayed transitions
-const notificationMachine = createMachine({
+const notificationMachine = createAdvancedMachine({
   id: 'notification',
   initial: 'hidden',
   context: { message: '' },
@@ -477,7 +785,7 @@ const notificationMachine = createMachine({
 
 ```typescript
 // always() - Transient transitions (immediate, condition-based)
-const formMachine = createMachine({
+const formMachine = createAdvancedMachine({
   id: 'form',
   initial: 'editing',
   context: { fields: {}, errors: [] },
@@ -509,14 +817,76 @@ const formMachine = createMachine({
 });
 ```
 
+```typescript
+// ✨ NEW: spawn() — динамічне створення child machines
+const todoListMachine = createAdvancedMachine({
+  id: 'todoList',
+  initial: 'idle',
+  context: {
+    todos: [] as Array<{ id: string; ref: MachineRef }>,
+  },
+  states: {
+    idle: {
+      on: {
+        ADD_TODO: {
+          action: (ctx, event) => {
+            // Створюємо child machine для кожного todo
+            const todoRef = spawn(todoMachine, {
+              id: `todo-${event.id}`,
+              input: { text: event.text },
+            });
+
+            return {
+              todos: [...ctx.todos, { id: event.id, ref: todoRef }],
+            };
+          },
+        },
+        REMOVE_TODO: {
+          action: (ctx, event) => {
+            const todo = ctx.todos.find((t) => t.id === event.id);
+            if (todo) {
+              // Зупиняємо child machine
+              todo.ref.stop();
+            }
+            return {
+              todos: ctx.todos.filter((t) => t.id !== event.id),
+            };
+          },
+        },
+      },
+    },
+  },
+});
+
+// Child machine
+const todoMachine = createAdvancedMachine({
+  id: 'todo',
+  initial: 'active',
+  context: { text: '', completed: false },
+  states: {
+    active: {
+      on: { TOGGLE: 'completed' },
+    },
+    completed: {
+      on: { TOGGLE: 'active' },
+    },
+  },
+});
+```
+
 #### Технічні задачі
 
+- [ ] **Створити `src/machine/` директорію для advanced features**
+- [ ] **`createAdvancedMachine()` wrapper з plugins**
 - [ ] `invoke()` implementation з Promise handling
 - [ ] `after()` implementation з timer management
 - [ ] `always()` implementation
+- [ ] **`spawn()` implementation з lifecycle management**
 - [ ] Cleanup timers on destroy
 - [ ] Cancel invoke on exit
+- [ ] **Stop spawned machines on parent destroy**
 - [ ] Type inference для invoke events
+- [ ] **Окремий package.json export для `svoose/machine`**
 - [ ] +25 нових тестів
 - [ ] Migration guide від базової FSM
 
@@ -589,15 +959,26 @@ observe({
 
 ## Bundle Size Targets
 
-| Версія | Full Bundle | observe() only | createMachine() only |
-|--------|-------------|----------------|---------------------|
-| v0.1.x | ~3.0 KB | ~2.1 KB | ~0.8 KB |
-| v0.2.0 | ~3.5 KB | ~2.5 KB | ~0.8 KB |
-| v0.3.0 | ~4.0 KB | ~2.5 KB | ~0.8 KB |
-| v0.4.0 | ~4.5 KB | ~2.5 KB | ~1.2 KB |
-| v0.5.0 | ~5.0 KB | ~2.5 KB | ~1.8 KB |
+| Версія | Core Bundle | observe() | createMachine() | Додатково |
+|--------|-------------|-----------|-----------------|-----------|
+| v0.1.x | ~3.0 KB | ~2.1 KB | ~0.8 KB | — |
+| v0.2.0 | ~3.5 KB | ~2.5 KB | ~0.8 KB | +transport: ~0.5KB |
+| v0.3.0 | ~3.5 KB | ~2.5 KB | ~0.8 KB | +sveltekit: ~1.2KB, +vite: ~0.8KB |
+| v0.4.0 | ~4.0 KB | ~2.5 KB | ~1.0 KB | +devtools: ~1.5KB |
+| v0.5.0 | ~4.0 KB | ~2.5 KB | ~0.8 KB | +machine: ~1.2KB (advanced FSM) |
 
-*SvelteKit entry додає ~1 KB окремо*
+### Entry Points Summary (v0.5.0+)
+
+| Entry Point | Розмір | Що включає |
+|-------------|--------|------------|
+| `svoose` | ~4.0 KB | Core: observe(), createMachine(), useMachine() |
+| `svoose/transport` | ~0.5 KB | Retry, beacon, hybrid transports |
+| `svoose/sveltekit` | ~1.2 KB | Server/client hooks, navigation |
+| `svoose/vite` | ~0.8 KB | Vite plugin для auto-instrumentation |
+| `svoose/machine` | ~1.2 KB | Advanced FSM: invoke, after, always, spawn |
+| `svoose/devtools` | ~1.5 KB | Chrome extension connector |
+
+> 💡 **Tree-shaking**: Всі entry points tree-shakeable. Імпортуйте тільки те, що потрібно.
 
 ---
 
@@ -709,6 +1090,10 @@ observe({
 | Дата | Версія | Зміни |
 |------|--------|-------|
 | 2026-01-20 | 1.0 | Початковий план |
+| 2026-01-21 | 1.1 | **Розширений v0.2.0**: Typed Metrics API, Sampling, Session/User tracking, sendBeacon transport, Privacy utilities |
+| | | **Розширений v0.3.0**: Vite plugin auto-instrumentation, Attribution API, Soft Navigation tracking |
+| | | **Оновлений v0.5.0**: Окремий entry point `svoose/machine` для advanced FSM, spawn() |
+| | | **Нова структура**: Entry Points Summary таблиця, оновлені bundle size targets |
 
 ---
 
