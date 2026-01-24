@@ -27,6 +27,7 @@ const entryPoints = [
   'src/observe/observe.svelte.ts',
   'src/observe/vitals.ts',
   'src/observe/errors.ts',
+  'src/observe/sampling.ts',
   'src/machine/index.ts',
   'src/machine/machine.svelte.ts',
   'src/machine/types.ts',
