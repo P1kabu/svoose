@@ -91,6 +91,32 @@ export interface TransportOptions {
 }
 
 // ============================================
+// Sampling Types
+// ============================================
+
+/**
+ * Per-event-type sampling rates
+ * Each rate is a number between 0 and 1 (0 = disabled, 1 = all)
+ */
+export interface SamplingConfig {
+  /** Sampling rate for Web Vitals events (default: 1) */
+  vitals?: number;
+  /** Sampling rate for error events (default: 1) */
+  errors?: number;
+  /** Sampling rate for custom metric events (default: 1) */
+  custom?: number;
+  /** Sampling rate for state machine transition events (default: 1) */
+  transitions?: number;
+  /** Sampling rate for identify events (default: 1) */
+  identify?: number;
+}
+
+/**
+ * Sampling option - either a single rate for all events or per-type config
+ */
+export type SamplingOption = number | SamplingConfig;
+
+// ============================================
 // Observe Options
 // ============================================
 
@@ -112,7 +138,29 @@ export interface ObserveOptions {
 
   /** Filter function for events */
   filter?: (event: ObserveEvent) => boolean;
-  /** Sampling rate (0-1) */
+
+  /**
+   * Per-event-type sampling rates
+   *
+   * @example
+   * // Simple - same rate for all events
+   * sampling: 0.1 // 10% of all events
+   *
+   * @example
+   * // Per-event-type rates (recommended)
+   * sampling: {
+   *   vitals: 0.1,       // 10% - sufficient for statistics
+   *   errors: 1.0,       // 100% - all errors matter
+   *   custom: 0.5,       // 50%
+   *   transitions: 0.0,  // disabled
+   * }
+   */
+  sampling?: SamplingOption;
+
+  /**
+   * @deprecated Use `sampling` instead. Will be removed in v0.3.0.
+   * Global sampling rate (0-1) - applies to entire observer
+   */
   sampleRate?: number;
 
   /** Log to console */

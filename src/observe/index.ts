@@ -8,3 +8,5 @@ export { observeErrors, registerMachineContext, unregisterMachineContext } from 
 export type { ObserveErrorEvent, ErrorEvent, UnhandledRejectionEvent } from './errors.js';
 export { vitalObservers, observeCLS, observeLCP, observeFID, observeINP, observeFCP, observeTTFB } from './vitals.js';
 export type { Metric, MetricName, MetricRating } from './vitals.js';
+export { createSampler, eventTypeToSamplingType } from './sampling.js';
+export type { SamplingConfig, SamplingOption, SamplingEventType, Sampler } from './sampling.js';

@@ -5,6 +5,11 @@
 import { vitalObservers, type Metric, type MetricName } from './vitals.js';
 import { observeErrors, type ObserveErrorEvent } from './errors.js';
 import { createFetchTransport } from '../transport/fetch.js';
+import {
+  createSampler,
+  eventTypeToSamplingType,
+  type Sampler,
+} from './sampling.js';
 import type { ObserveOptions, VitalEvent, ObserveEvent, Transport } from '../types/index.js';
 
 // Default configuration
@@ -16,7 +21,7 @@ const defaults = {
   flushInterval: 5000,
   sampleRate: 1,
   debug: false,
-} satisfies Required<Omit<ObserveOptions, 'transport' | 'filter'>>;
+} satisfies Required<Omit<ObserveOptions, 'transport' | 'filter' | 'sampling'>>;
 
 // Global observer callback for state machines
 let globalObserverCallback: ((event: ObserveEvent) => void) | null = null;
@@ -57,13 +62,18 @@ export function getGlobalObserver(): typeof globalObserverCallback {
  * });
  */
 export function observe(options: ObserveOptions = {}): () => void {
-  // Check sampling rate
+  // Legacy sampleRate support (deprecated) - skip entire observer
   if (Math.random() > (options.sampleRate ?? defaults.sampleRate)) {
     return () => {};
   }
 
   const config = { ...defaults, ...options };
   const transport: Transport = config.transport ?? createFetchTransport(config.endpoint);
+
+  // Create sampler if sampling option is provided
+  const sampler: Sampler | null = config.sampling != null
+    ? createSampler(config.sampling)
+    : null;
 
   const cleanups: (() => void)[] = [];
   const buffer: ObserveEvent[] = [];
@@ -83,6 +93,14 @@ export function observe(options: ObserveOptions = {}): () => void {
     // Apply filter if provided
     if (config.filter && !config.filter(event)) {
       return;
+    }
+
+    // Apply per-event-type sampling
+    if (sampler) {
+      const samplingType = eventTypeToSamplingType(event.type);
+      if (samplingType && !sampler.shouldSample(samplingType)) {
+        return;
+      }
     }
 
     if (config.debug) {

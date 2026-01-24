@@ -11,6 +11,12 @@ export { observe } from './observe/index.js';
 export type { ObserveOptions } from './observe/index.js';
 
 // ============================================
+// Sampling
+// ============================================
+export { createSampler, eventTypeToSamplingType } from './observe/index.js';
+export type { SamplingConfig, SamplingOption, SamplingEventType, Sampler } from './observe/index.js';
+
+// ============================================
 // Error Tracking
 // ============================================
 export {
