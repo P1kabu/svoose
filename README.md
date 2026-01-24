@@ -75,8 +75,15 @@ const cleanup = observe({
   batchSize: 10,
   flushInterval: 5000,
 
-  // Sampling
-  sampleRate: 0.1,           // 10% of users
+  // Sampling (v0.1.3+)
+  sampling: 0.1,             // 10% of all events
+  // or per-event-type (recommended)
+  sampling: {
+    vitals: 0.1,             // 10% — sufficient for statistics
+    errors: 1.0,             // 100% — all errors matter
+    custom: 0.5,             // 50% of custom metrics
+    transitions: 0.0,        // disabled
+  },
 
   // Debug
   debug: false,
@@ -85,6 +92,32 @@ const cleanup = observe({
 // Stop observing
 cleanup();
 ```
+
+#### Sampling (v0.1.3+)
+
+Control what percentage of events are sent to your backend:
+
+```typescript
+// Simple: same rate for all events
+observe({
+  endpoint: '/api/metrics',
+  sampling: 0.1, // 10% of all events
+});
+
+// Per-event-type: recommended for production
+observe({
+  endpoint: '/api/metrics',
+  sampling: {
+    vitals: 0.1,       // 10% — sufficient for accurate statistics
+    errors: 1.0,       // 100% — capture all errors
+    custom: 0.5,       // 50% of custom metrics
+    transitions: 0.0,  // disabled — no state machine events
+    identify: 1.0,     // 100% — always track user identification
+  },
+});
+```
+
+> **Note**: `sampleRate` is deprecated. Use `sampling` instead.
 
 ### `createMachine(config)`
 
@@ -369,10 +402,13 @@ const machine = createMachine({
 
 ## Roadmap
 
-- **v0.2** — Enhanced Observability (custom metrics, retry logic, network awareness)
-- **v0.3** — SvelteKit Integration (hooks, route tracking, SSR safety)
-- **v0.4** — Developer Experience (devtools, transition history, visualization)
-- **v0.5** — Core FSM Enhancements (`invoke()`, `after()`, `always()`)
+- **v0.1.3-v0.1.9** — Incremental features (sampling, sessions, custom metrics, retry, privacy)
+- **v0.2.0** — Production-Ready Observability (network awareness, offline queue, user identification)
+- **v0.3.0** — SvelteKit Integration (Vite plugin, hooks, route tracking)
+- **v0.4.0** — Developer Experience (CLI, dashboard template)
+- **v1.0.0** — Stable Release (Q1 2027)
+
+> **Note**: FSM is a lightweight bonus feature, not an XState competitor. For complex state machines, use XState.
 
 See [ROADMAP.md](./ROADMAP.md) for detailed plans.
 
