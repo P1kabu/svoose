@@ -7,8 +7,94 @@
 1. **Svelte-first** — кожна функція оптимізована для Svelte 5 екосистеми
 2. **Lightweight** — bundle size < 5KB залишається пріоритетом
 3. **Zero dependencies** — ніяких runtime залежностей
-4. **Observability focus** — FSM як доповнення, не основна мета
+4. **Observability focus** — FSM як легке доповнення, не конкурент XState
 5. **Production-ready** — кожен реліз готовий до production
+6. **Incremental delivery** — малі, часті релізи замість великих
+7. **Framework-agnostic core** — core працює без Svelte, адаптери окремо
+8. **Stay focused** — краще робити менше, але добре
+9. **Docs-first releases** — README оновлюється з кожним релізом
+
+---
+
+## Documentation Strategy
+
+### Принципи
+
+1. **README = Single Source of Truth** — вся актуальна документація в README.md
+2. **One feature = One example** — кожна нова фіча має мінімальний приклад
+3. **Progressive complexity** — Quick Start → Basic → Advanced
+4. **Copy-paste friendly** — приклади готові до використання
+
+### README Structure
+
+```
+README.md
+├── Quick Start (3 рядки коду)
+├── Features (список)
+├── Installation
+├── API Reference
+│   ├── observe()
+│   │   ├── Basic
+│   │   ├── Sampling (v0.1.3+)
+│   │   ├── Sessions (v0.1.4+)
+│   │   ├── Privacy (v0.1.9+)
+│   │   └── Full Production Setup (v0.2.0+)
+│   ├── Metrics (v0.1.5+)
+│   │   ├── metric()
+│   │   ├── counter(), gauge(), histogram() (v0.1.6+)
+│   │   └── createTypedMetric() (v0.1.6+)
+│   ├── Transport (v0.1.7+)
+│   │   ├── Retry
+│   │   ├── Beacon (v0.1.8+)
+│   │   └── Hybrid (v0.1.8+)
+│   ├── User Identification (v0.2.0+)
+│   └── createMachine()
+├── Svelte 5 Usage
+├── Bundle Size
+├── TypeScript
+├── Roadmap (коротко)
+└── License
+```
+
+### Release Checklist (Documentation)
+
+Кожен реліз повинен включати:
+
+- [ ] README.md оновлено з новим API
+- [ ] Один простий приклад для кожної нової функції
+- [ ] Bundle size table оновлено
+- [ ] Roadmap section актуальний
+
+---
+
+## Продуктова Стратегія
+
+### Один продукт — observability toolkit
+
+```
+svoose → "Svelte 5 observability toolkit"
+         Web Vitals, errors, custom metrics, session tracking
+         + lightweight state helper з auto-telemetry (bonus)
+```
+
+**FSM як bonus**: `createMachine()` / `useMachine()` — це lightweight helper для простих UI станів (loading, error, success). Не альтернатива XState. Для складних state machines — використовуйте XState.
+
+### Конкурентне позиціонування
+
+| Сегмент | Конкуренти | Перевага svoose |
+|---------|------------|-----------------|
+| Observability | Vercel Analytics, PostHog | Open source, self-hosted, Svelte-native |
+| Web Vitals | web-vitals | Batching, transports, error context |
+
+> **Note**: FSM не є сегментом конкуренції. Для advanced FSM — XState. svoose FSM = lightweight bonus.
+
+### Ризики та страховки
+
+| Ризик | Страховка |
+|-------|-----------|
+| Svelte ринок замалий | Core framework-agnostic, можна додати React adapter |
+| Хтось займе нішу раніше | Пріоритет SvelteKit integration (v0.3.0) |
+| Maintenance burden | Мінімальний API surface, автоматизовані тести |
 
 ---
 
@@ -20,8 +106,8 @@
 
 - [x] Web Vitals (CLS, LCP, FID, INP, FCP, TTFB)
 - [x] Error tracking (global errors + unhandled rejections)
-- [x] Базова FSM з TypeScript inference
-- [x] `useMachine()` hook для Svelte 5
+- [x] Lightweight state helper з TypeScript inference (bonus)
+- [x] `useMachine()` hook для Svelte 5 (bonus)
 - [x] Batching та sampling
 - [x] Fetch/Console транспорти
 - [x] 90 тестів
@@ -30,297 +116,351 @@
 
 ---
 
-### 🚧 v0.2.0 — Enhanced Observability
+### ✅ v0.1.3 — Sampling
 
-**Статус**: В розробці
-**Пріоритет**: Критичний
-**Цільова дата**: Q1 2026
+**Статус**: Випущено (з багом)
+**Дата релізу**: Січень 2026
 
-#### Нові функції
+| Функція | Опис |
+|---------|------|
+| **Sampling** | Per-event-type rate limiting (vitals: 10%, errors: 100%) |
 
-| Функція | Опис | Статус |
-|---------|------|--------|
-| **Typed Metrics API** | Типізовані користувацькі метрики з autocomplete | ⬜ Todo |
-| Custom Metrics API | Користувацькі метрики з batching | ⬜ Todo |
-| **Sampling** | Відправляти лише % подій (production optimization) | ⬜ Todo |
-| **Session Tracking** | Автоматичний sessionId для групування подій | ⬜ Todo |
-| **User Identification** | Опціональний userId для аналітики | ⬜ Todo |
-| Retry Logic | Exponential backoff для транспорту | ⬜ Todo |
-| **sendBeacon Transport** | Надійна відправка при закритті сторінки | ⬜ Todo |
-| Multiple Machine Context | Всі машини в error context | ⬜ Todo |
-| Network Status Awareness | Pause/resume на offline | ⬜ Todo |
-| Dead Letter Queue | Збереження failed events | ⬜ Todo |
-| **Privacy Utilities** | PII scrubbing, data sanitization | ⬜ Todo |
+**Bundle**: 3.1 KB (+0.1 KB)
 
-#### API Design
+> ⚠️ **Відомий баг**: `sampling.js` не включений в npm пакет. Виправлено в v0.1.4.
 
+---
+
+### ✅ v0.1.4 — Hotfix: Missing sampling.js
+
+**Статус**: Випущено
+**Дата релізу**: 24 Січня 2026
+
+| Функція | Опис |
+|---------|------|
+| **Bugfix** | Виправлено відсутній `sampling.js` в npm пакеті |
+
+**Причина**: `src/observe/sampling.ts` не був включений в esbuild entryPoints в `scripts/build.js`.
+
+---
+
+### 📋 v0.1.5 — Session Tracking + Vitals Filter
+
+**Статус**: Планується
+**Пріоритет**: Critical
+**Цільова дата**: Лютий 2026, Week 2
+
+| Функція | Опис |
+|---------|------|
+| **Session Tracking** | Автоматичний sessionId з timeout |
+| **vitalsFilter** | Callback для фільтрації Web Vitals (CLS noise від анімацій) |
+
+**Bundle**: 3.2 KB (+0.1 KB)
+
+**📝 README Update**:
+- Додати в `observe()` секцію "Sessions"
+- Додати в `observe()` секцію "Filtering Vitals"
+- Приклад Session:
 ```typescript
-// Custom Metrics
-import { observe, metric } from 'svoose';
+observe({
+  endpoint: '/api/metrics',
+  session: {
+    timeout: 30 * 60 * 1000,  // 30 min = new session
+    storage: 'sessionStorage',
+  },
+});
+// All events now include sessionId
+```
 
+- Приклад vitalsFilter (CLS noise filtering):
+```typescript
 observe({
   endpoint: '/api/metrics',
   vitals: true,
-  errors: true,
-});
-
-// Emit custom metric anywhere in your app
-metric('checkout_started', { step: 1, cartTotal: 99.99 });
-metric('feature_used', { name: 'dark_mode', enabled: true });
-
-// ✨ NEW: Typed Metrics API (повний autocomplete)
-import { createTypedMetric } from 'svoose';
-
-// Визначте всі ваші метрики з типами
-type AppMetrics = {
-  checkout_started: { step: number; cartTotal: number };
-  feature_used: { name: string; enabled: boolean };
-  search_performed: { query: string; resultsCount: number };
-  error_boundary_hit: { componentName: string; error: string };
-};
-
-const metric = createTypedMetric<AppMetrics>();
-
-metric('checkout_started', { step: 1, cartTotal: 99.99 }); // ✅ autocomplete працює
-metric('checkout_started', { wrong: 'field' });            // ❌ TypeScript error
-metric('unknown_metric', {});                               // ❌ TypeScript error
-
-// Or use callback style in observe()
-observe({
-  custom: (emit) => {
-    // Track custom performance marks
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        emit({
-          type: 'custom',
-          name: entry.name,
-          value: entry.duration,
-          metadata: { startTime: entry.startTime },
-        });
-      }
-    });
-    observer.observe({ entryTypes: ['measure'] });
-    return () => observer.disconnect();
+  vitalsFilter: (vital) => {
+    // Ігнорувати мікро-CLS від CSS анімацій (< 0.01)
+    if (vital.name === 'CLS' && vital.delta < 0.01) return false;
+    return true;
   },
 });
 ```
 
+> **Чому потрібно?** CSS анімації (акордеони, модалки) генерують багато мікро-CLS подій з delta < 0.01.
+> Поріг 0.01 — в 10 разів менше за Google "good" (< 0.1), надійно ловить реальні проблеми верстки.
+
+---
+
+### 📋 v0.1.6 — Basic Custom Metrics
+
+**Статус**: Планується
+**Пріоритет**: Critical
+**Цільова дата**: Лютий 2026, Week 3
+
+| Функція | Опис |
+|---------|------|
+| **metric()** | Базова функція для custom events |
+| **Dev warnings** | Попередження якщо observe() не викликано |
+
+**Bundle**: 3.25 KB (+0.05 KB)
+
+**📝 README Update**:
+- Додати нову секцію "### Custom Metrics"
+- Приклад:
 ```typescript
-// Retry Logic
+import { observe, metric } from 'svoose';
+
+observe({ endpoint: '/api/metrics' });
+
+metric('checkout_started', { step: 1, cartTotal: 99.99 });
+metric('feature_used', { name: 'dark_mode' });
+```
+
+---
+
+### 📋 v0.1.7 — Extended Metrics + Typed API
+
+**Статус**: Планується
+**Пріоритет**: Critical
+**Цільова дата**: Лютий 2026, Week 4
+
+| Функція | Опис |
+|---------|------|
+| **counter()** | Інкременти (api_calls, button_clicks) |
+| **gauge()** | Абсолютні значення (active_users, queue_size) |
+| **histogram()** | Розподіли (response_time, payload_size) |
+| **createTypedMetric<T>()** | TypeScript autocomplete для метрик |
+
+**Bundle**: 3.4 KB (+0.15 KB)
+
+**📝 README Update**:
+- Розширити секцію "Custom Metrics"
+- Приклад:
+```typescript
+import { counter, gauge, histogram, createTypedMetric } from 'svoose';
+
+counter('api_calls', { endpoint: '/users' });
+gauge('active_users', 42);
+histogram('response_time', 234);
+
+// Typed metrics (full autocomplete)
+type AppMetrics = {
+  checkout: { step: number; total: number };
+};
+const track = createTypedMetric<AppMetrics>();
+track('checkout', { step: 1, total: 99 }); // ✅ autocomplete
+```
+
+---
+
+### 📋 v0.1.8 — Retry Logic
+
+**Статус**: Планується
+**Пріоритет**: High
+**Цільова дата**: Березень 2026, Week 1
+
+| Функція | Опис |
+|---------|------|
+| **Retry Logic** | Exponential backoff (3 attempts, 1s → 30s) |
+| **Backoff Strategies** | fixed, linear, exponential |
+| **Jitter** | ±10% randomization для уникнення thundering herd |
+| **Timeout** | AbortController timeout для fetch |
+
+**Bundle**: 3.55 KB (+0.15 KB)
+
+**📝 README Update**:
+- Додати секцію "### Transport Options" → "Retry"
+- Приклад:
+```typescript
 import { createFetchTransport } from 'svoose/transport';
 
 const transport = createFetchTransport('/api/metrics', {
   retry: {
-    attempts: 3,           // Max retry attempts
-    backoff: 'exponential', // 'exponential' | 'linear' | 'fixed'
-    initialDelay: 1000,    // Start with 1s delay
-    maxDelay: 30000,       // Max 30s between retries
+    attempts: 3,
+    backoff: 'exponential',
+    jitter: true,
   },
-  onRetry: (attempt, error) => {
-    console.log(`Retry attempt ${attempt}:`, error);
-  },
-  onMaxRetries: (events) => {
-    // Events that failed after all retries
-    localStorage.setItem('failed_metrics', JSON.stringify(events));
-  },
+  timeout: 10000,
 });
 ```
 
+---
+
+### 📋 v0.1.9 — Beacon + Hybrid Transport
+
+**Статус**: Планується
+**Пріоритет**: High
+**Цільова дата**: Березень 2026, Week 2
+
+| Функція | Опис |
+|---------|------|
+| **sendBeacon Transport** | Надійна відправка при закритті сторінки |
+| **Payload Chunking** | Auto-split для payloads > 60KB |
+| **Hybrid Transport** | fetch + beacon auto-switch on unload |
+
+**Bundle**: 3.7 KB (+0.15 KB)
+
+**📝 README Update**:
+- Розширити "Transport Options" → "Beacon & Hybrid"
+- Приклад:
 ```typescript
-// Network Awareness
-observe({
-  endpoint: '/api/metrics',
-  networkAware: true, // Pause when offline, resume when online
-  offlineStorage: 'localStorage', // or 'indexeddb' | 'memory'
-  maxOfflineEvents: 1000,
-});
-```
-
-```typescript
-// ✨ NEW: Sampling — критично для high-traffic сайтів
-observe({
-  endpoint: '/api/metrics',
-  vitals: true,
-  errors: true,
-
-  sampling: {
-    // Відправляти лише 10% vitals (економія bandwidth)
-    vitals: 0.1,
-    // Але всі помилки важливі!
-    errors: 1.0,
-    // Custom метрики — 50%
-    custom: 0.5,
-  },
-
-  // Або простий варіант — однаковий % для всіх
-  // sampling: 0.1, // 10% всіх подій
-});
-```
-
-```typescript
-// ✨ NEW: Session & User Tracking
-observe({
-  endpoint: '/api/metrics',
-
-  // Автоматичний sessionId (генерується при завантаженні сторінки)
-  session: true,
-
-  // Або з кастомною конфігурацією
-  session: {
-    // Час неактивності до нової сесії (default: 30 хвилин)
-    timeout: 30 * 60 * 1000,
-    // Зберігати між вкладками
-    crossTab: true,
-    // Storage для sessionId
-    storage: 'sessionStorage', // or 'localStorage' | 'memory'
-  },
-
-  // Опціональна ідентифікація користувача
-  user: {
-    id: 'user_123',           // Ваш user ID
-    traits: {                 // Опціональні атрибути
-      plan: 'premium',
-      signupDate: '2024-01-15',
-    },
-  },
-});
-
-// Або динамічно встановити користувача пізніше
-import { identify } from 'svoose';
-
-identify({
-  id: 'user_456',
-  traits: { plan: 'free' },
-});
-
-// Скинути при logout
-identify(null);
-```
-
-```typescript
-// ✨ NEW: sendBeacon Transport — надійна відправка при закритті сторінки
-import { createBeaconTransport } from 'svoose/transport';
-
-observe({
-  endpoint: '/api/metrics',
-
-  // Автоматично використовує sendBeacon при unload
-  transport: createBeaconTransport('/api/metrics', {
-    // Fallback до fetch якщо beacon недоступний
-    fallback: 'fetch',
-    // Максимальний розмір payload (beacon має ліміт ~64KB)
-    maxPayloadSize: 60000,
-  }),
-});
-
-// Або комбінований транспорт
 import { createHybridTransport } from 'svoose/transport';
 
+// Recommended for production
 observe({
   transport: createHybridTransport('/api/metrics', {
-    // Використовувати fetch для звичайних подій
     default: 'fetch',
-    // Але beacon для подій при закритті сторінки
-    onUnload: 'beacon',
-    // Retry конфігурація для fetch
+    onUnload: 'beacon',  // reliable on page close
     retry: { attempts: 3, backoff: 'exponential' },
   }),
 });
 ```
 
+---
+
+### 📋 v0.1.10 — Privacy Utilities
+
+**Статус**: Планується
+**Пріоритет**: High
+**Цільова дата**: Березень 2026, Week 3
+
+| Функція | Опис |
+|---------|------|
+| **URL Scrubbing** | Видалення токенів з URL (strings + regex) |
+| **Field Masking** | Маскування PII (показ останніх 4 символів) |
+| **Custom Sanitizer** | Кастомна санітизація events |
+| **Privacy Options** | stripQueryParams, stripHash, excludeUserAgent |
+
+**Bundle**: 3.85 KB (+0.15 KB)
+
+**📝 README Update**:
+- Додати нову секцію "### Privacy"
+- Disclaimer: "Privacy-focused utilities, not legal compliance guarantees"
+- Приклад:
 ```typescript
-// ✨ NEW: Privacy Utilities — GDPR/CCPA compliance
 import { observe, configurePII } from 'svoose';
 
-// Глобальна конфігурація PII scrubbing
 configurePII({
-  // Автоматично видаляти з URL
-  scrubFromUrl: [
-    'email',
-    'token',
-    'password',
-    'api_key',
-    /user_id=\d+/,  // Regex patterns
-  ],
-
-  // Маскувати в custom метриках
-  maskFields: ['email', 'phone', 'creditCard'],
-
-  // Кастомний sanitizer
-  sanitize: (event) => {
-    if (event.metadata?.email) {
-      event.metadata.email = '[REDACTED]';
-    }
-    return event;
-  },
+  scrubFromUrl: ['token', 'api_key'],
+  maskFields: ['email', 'phone'],
 });
 
 observe({
   endpoint: '/api/metrics',
-  vitals: true,
-
-  // Privacy режим для конкретного observe
-  privacy: {
-    // Не відправляти повний URL (тільки pathname)
-    stripQueryParams: true,
-    // Не включати user-agent
-    excludeUserAgent: true,
-    // Хешувати IP на сервері
-    hashIP: true,
-  },
+  privacy: { stripQueryParams: true },
 });
 ```
 
-#### Технічні задачі
+---
 
-- [ ] Рефакторинг `observe.svelte.ts` для extensibility
-- [ ] Додати `metric()` функцію в exports
-- [ ] **Імплементувати `createTypedMetric<T>()` з generic типами**
-- [ ] **Sampling engine з per-event-type конфігурацією**
-- [ ] **Session manager (generation, timeout, cross-tab sync)**
-- [ ] **User identification API (`identify()` function)**
-- [ ] Імплементувати retry queue в transport
-- [ ] **`createBeaconTransport()` з fallback логікою**
-- [ ] **`createHybridTransport()` для fetch + beacon**
-- [ ] Network status detection (navigator.onLine + events)
-- [ ] LocalStorage adapter для offline events
-- [ ] **PII scrubbing utilities (`configurePII()`)**
-- [ ] **Privacy options в observe config**
-- [ ] Оновити всі error contexts для multiple machines
-- [ ] +50 нових тестів (sampling, session, privacy, beacon)
-- [ ] Оновити README з новими API
-- [ ] **Приклад: "Production Setup" guide**
+### 🚧 v0.2.0 — Production-Ready Observability ⭐
 
-#### Breaking Changes
+**Статус**: В розробці
+**Пріоритет**: Critical
+**Цільова дата**: Березень 2026, Week 4
 
-Немає — повна backward compatibility
+> 📋 Детальний план: [.claude/v0.2.0-plan.md](.claude/v0.2.0-plan.md)
+>
+> **Major release**: Повний production-ready observability stack
 
-#### Migration
+| Функція | Опис |
+|---------|------|
+| **Network Detection** | Pause/resume на offline/online |
+| **Offline Queue** | localStorage queue з FIFO eviction |
+| **User Identification** | `identify()` для аналітики |
+| **Multiple Machine Context** | Всі активні машини в error events |
 
-Не потрібна — всі нові функції opt-in
+**Bundle**: 4.1 KB (+0.25 KB)
+
+**📝 README Update** (Major):
+- Додати секцію "### User Identification"
+- Додати секцію "### Network Resilience"
+- Додати "## Production Setup" з повним прикладом
+- Оновити Bundle Size table
+- Приклад identify():
+```typescript
+import { observe, identify } from 'svoose';
+
+observe({ endpoint: '/api/metrics', networkAware: true });
+
+// After login
+identify({ id: 'user_123', traits: { plan: 'premium' } });
+
+// After logout
+identify(null);
+```
+- Приклад Production Setup:
+```typescript
+import { observe, configurePII, identify } from 'svoose';
+import { createHybridTransport } from 'svoose/transport';
+
+configurePII({ scrubFromUrl: ['token'], maskFields: ['email'] });
+
+observe({
+  endpoint: '/api/metrics',
+  vitals: true,
+  errors: true,
+  sampling: { vitals: 0.1, errors: 1.0 },
+  session: { timeout: 30 * 60 * 1000 },
+  networkAware: true,
+  offlineStorage: 'localStorage',
+  transport: createHybridTransport('/api/metrics', {
+    default: 'fetch',
+    onUnload: 'beacon',
+    retry: { attempts: 3, backoff: 'exponential' },
+  }),
+});
+```
+
+**Milestone Summary (v0.1.3 → v0.2.0)**:
+- ✅ Sampling (per-event-type)
+- ✅ Session Tracking (timeout, storage options)
+- ✅ Custom Metrics (metric, counter, gauge, histogram)
+- ✅ Typed Metrics (createTypedMetric<T>)
+- ✅ Retry + Beacon Transport
+- ✅ Privacy Utilities
+- ✅ Network Awareness + Offline Queue
+- ✅ User Identification
 
 ---
 
-### 📋 v0.3.0 — SvelteKit Integration
+### 🎯 v0.3.0 — SvelteKit Integration (ПРІОРИТЕТ)
 
 **Статус**: Планується
-**Пріоритет**: Високий
-**Цільова дата**: Q2 2026
+**Пріоритет**: **КРИТИЧНИЙ** — ключова конкурентна перевага
+**Цільова дата**: Травень-Червень 2026 (8 тижнів)
+
+> **Чому пріоритет?** SvelteKit — де 80% Svelte розробників. Zero-config integration = adoption.
 
 #### Нові функції
 
-| Функція | Опис | Статус |
-|---------|------|--------|
-| `svoose/sveltekit` entry | Новий entry point | ⬜ Todo |
-| **Vite Plugin** | Автоматична інструментація load() без обгорток | ⬜ Todo |
-| Server Hooks | handle(), handleError() | ⬜ Todo |
-| Route Tracking | Автоматичний page view tracking | ⬜ Todo |
-| **Soft Navigation Tracking** | SPA navigation з Core Web Vitals | ⬜ Todo |
-| SSR Safety | Graceful server-side handling | ⬜ Todo |
-| Load Function Tracking | Track load() performance | ⬜ Todo |
-| **Attribution API** | Визначення джерела проблем (LCP element, CLS source) | ⬜ Todo |
+| Функція | Опис | Пріоритет |
+|---------|------|-----------|
+| `svoose/sveltekit` entry | Server/client hooks | Critical |
+| **Vite Plugin** | Auto-instrumentation для load() | Critical |
+| Route Tracking | Автоматичний page view tracking | Critical |
+| SSR Safety | Graceful server-side handling | Critical |
+| **Soft Navigation** | SPA navigation metrics | High |
+| **Attribution API** | LCP element, CLS source identification | Medium |
 
 #### API Design
+
+```typescript
+// vite.config.ts — Zero-config auto-instrumentation
+import { svoosePlugin } from 'svoose/vite';
+
+export default defineConfig({
+  plugins: [
+    sveltekit(),
+    svoosePlugin({
+      autoInstrumentLoad: true,
+      autoInit: {
+        endpoint: '/api/metrics',
+        vitals: true,
+      },
+    }),
+  ],
+});
+```
 
 ```typescript
 // hooks.server.ts
@@ -328,15 +468,8 @@ import { createSvooseHooks } from 'svoose/sveltekit';
 
 const svoose = createSvooseHooks({
   endpoint: '/api/metrics',
-
-  // Server-side options
-  serverErrors: true,      // Track server errors
-  requestTiming: true,     // Track request duration
-
-  // What to include in events
-  includeRoute: true,      // Current route
-  includeParams: false,    // URL params (privacy)
-  includeUserAgent: true,  // Browser info
+  serverErrors: true,
+  requestTiming: true,
 });
 
 export const handle = svoose.handle;
@@ -344,207 +477,50 @@ export const handleError = svoose.handleError;
 ```
 
 ```typescript
-// hooks.client.ts
-import { createClientHooks } from 'svoose/sveltekit';
+// hooks.client.ts — автоматична ініціалізація
+import { initSvoose } from 'svoose/sveltekit';
 
-export const { init } = createClientHooks({
+initSvoose({
   endpoint: '/api/metrics',
-
-  // Client-side options
   vitals: true,
   errors: true,
-
-  // Navigation tracking
-  navigation: {
-    enabled: true,
-    trackParams: false,    // Don't track URL params
-    trackSearchParams: false,
-  },
+  routeTracking: true,  // auto page views
 });
-
-// Call in +layout.svelte onMount
-init();
 ```
 
 ```typescript
-// +layout.svelte
-<script lang="ts">
-  import { onMount } from 'svelte';
-  import { init } from '$lib/hooks.client';
+// Attribution API — зрозуміти ЧОМУ метрика погана
+// Окремий import: svoose/attribution (+1.5KB)
+import { observe } from 'svoose';
+import { withAttribution } from 'svoose/attribution';
 
-  onMount(() => {
-    const cleanup = init();
-    return cleanup;
-  });
-</script>
-
-<slot />
-```
-
-```typescript
-// Track load() function performance
-// +page.ts
-import { trackLoad } from 'svoose/sveltekit';
-
-export const load = trackLoad(async ({ fetch, params }) => {
-  const data = await fetch(`/api/posts/${params.id}`);
-  return { post: await data.json() };
-});
-
-// Automatically tracks:
-// - Load duration
-// - Route name
-// - Success/failure
-```
-
-```typescript
-// ✨ NEW: Vite Plugin — Zero-config автоматична інструментація
-// vite.config.ts
-import { defineConfig } from 'vite';
-import { sveltekit } from '@sveltejs/kit/vite';
-import { svoosePlugin } from 'svoose/vite';
-
-export default defineConfig({
-  plugins: [
-    sveltekit(),
-    svoosePlugin({
-      // Автоматично обгортає всі load() функції
-      autoInstrumentLoad: true,
-
-      // Автоматично додає observe() в +layout.svelte
-      autoInit: {
-        endpoint: '/api/metrics',
-        vitals: true,
-        errors: true,
-      },
-
-      // Виключити певні роути з tracking
-      exclude: ['/admin/*', '/internal/*'],
-
-      // Включити source maps для error tracking
-      sourceMaps: true,
-    }),
-  ],
-});
-
-// Тепер НЕ потрібно обгортати кожен load() вручну!
-// +page.ts — звичайний код, svoose інструментує автоматично
-export const load = async ({ fetch, params }) => {
-  const data = await fetch(`/api/posts/${params.id}`);
-  return { post: await data.json() };
-};
-```
-
-```typescript
-// ✨ NEW: Attribution API — зрозуміти ЧОМУ метрика погана
-import { observe } from 'svoose/sveltekit';
-
-observe({
+observe(withAttribution({
   endpoint: '/api/metrics',
-  vitals: {
-    enabled: true,
-    // Включити детальну атрибуцію
-    attribution: true,
-  },
-});
+  vitals: true,
+}));
 
-// Тепер vitals включають attribution data:
+// Result:
 // {
 //   type: 'vital',
 //   name: 'LCP',
 //   value: 2500,
-//   rating: 'needs-improvement',
 //   attribution: {
-//     element: 'img#hero-image',           // Який елемент викликав LCP
-//     url: 'https://example.com/hero.jpg', // URL ресурсу
-//     resourceLoadTime: 1200,              // Час завантаження
-//     renderDelay: 300,                    // Затримка рендерингу
-//   }
-// }
-
-// Для CLS:
-// {
-//   type: 'vital',
-//   name: 'CLS',
-//   value: 0.15,
-//   attribution: {
-//     largestShiftSource: 'div.ad-banner', // Елемент що зсунувся найбільше
-//     largestShiftTime: 1500,              // Коли стався зсув
-//     loadState: 'dom-content-loaded',     // Стан сторінки
-//   }
-// }
-
-// Для INP:
-// {
-//   type: 'vital',
-//   name: 'INP',
-//   value: 350,
-//   attribution: {
-//     interactionTarget: 'button#submit',  // На що клікнули
-//     interactionType: 'pointer',          // Тип взаємодії
-//     inputDelay: 50,                      // Затримка до обробки
-//     processingDuration: 200,             // Час обробки
-//     presentationDelay: 100,              // Затримка відображення
+//     element: 'img#hero-image',
+//     url: 'https://example.com/hero.jpg',
+//     resourceLoadTime: 1200,
 //   }
 // }
 ```
 
-```typescript
-// ✨ NEW: Soft Navigation Tracking — SPA navigation metrics
-import { createClientHooks } from 'svoose/sveltekit';
+#### Технічні ризики
 
-export const { init } = createClientHooks({
-  endpoint: '/api/metrics',
+| Ризик | Mitigation |
+|-------|------------|
+| Vite plugin AST transformation | **Primary**: manual `trackLoad()` wrapper; plugin як opt-in |
+| Attribution API bundle size | Окремий entry point `svoose/attribution` (+1.5KB) |
+| Soft Navigation API experimental | Feature detection + graceful degradation |
 
-  navigation: {
-    enabled: true,
-    // Трекати soft navigations як окремі "page views"
-    softNavigations: true,
-    // Core Web Vitals для кожної soft navigation
-    softNavVitals: ['LCP', 'CLS', 'INP'],
-  },
-});
-
-// Результат: отримуєте Web Vitals не тільки для initial load,
-// але й для кожного переходу між сторінками в SPA
-```
-
-#### Технічні задачі
-
-- [ ] Створити `src/sveltekit/` директорію
-- [ ] **Vite plugin (`svoose/vite`) з AST transformation**
-- [ ] **Auto-instrumentation для load() функцій**
-- [ ] Server hooks implementation
-- [ ] Client hooks implementation
-- [ ] Navigation tracking з `beforeNavigate`/`afterNavigate`
-- [ ] **Soft navigation detection та metrics reset**
-- [ ] `trackLoad()` wrapper (для manual usage)
-- [ ] **Attribution API integration з web-vitals/attribution**
-- [ ] SSR detection та graceful handling
-- [ ] +30 нових тестів (потребує SvelteKit test setup)
-- [ ] Документація: SvelteKit Quick Start guide
-- [ ] **Документація: Vite Plugin configuration**
-- [ ] Example SvelteKit project
-
-#### Breaking Changes
-
-Немає
-
-#### Package.json Update
-
-```json
-{
-  "exports": {
-    ".": { ... },
-    "./svelte": { ... },
-    "./sveltekit": {
-      "types": "./dist/sveltekit/index.d.ts",
-      "import": "./dist/sveltekit/index.js"
-    },
-    "./transport": { ... }
-  }
-}
-```
+**Bundle**: +1.5 KB для sveltekit entry
 
 ---
 
@@ -552,536 +528,269 @@ export const { init } = createClientHooks({
 
 **Статус**: Планується
 **Пріоритет**: Середній
-**Цільова дата**: Q3 2026
+**Цільова дата**: Q3-Q4 2026
 
-#### Нові функції
+| Функція | Опис | Пріоритет |
+|---------|------|-----------|
+| **CLI Tool** | `npx svoose check` — валідація конфігу | High |
+| **Dashboard Template** | Grafana/простий HTML dashboard | High |
 
-| Функція | Опис | Статус |
-|---------|------|--------|
-| Devtools Extension | Chrome extension для inspection | ⬜ Todo |
-| Transition History | Circular buffer логу | ⬜ Todo |
-| Machine Visualization | Export діаграм | ⬜ Todo |
-| Enhanced Debug Mode | Grouped console output | ⬜ Todo |
-| Event Replay | Replay transitions для debug | ⬜ Todo |
-
-#### API Design
-
-```typescript
-// Devtools connection
-const machine = createMachine({
-  id: 'auth',
-  initial: 'idle',
-  states: { /* ... */ },
-
-  // Enable devtools (auto-disabled in production)
-  devtools: true,
-
-  // Keep transition history
-  history: {
-    enabled: true,
-    maxSize: 100, // Keep last 100 transitions
-  },
-});
-
-// Access history programmatically
-machine.getHistory();
-// Returns: [
-//   { from: 'idle', to: 'loading', event: 'LOGIN', timestamp: 1234567890 },
-//   { from: 'loading', to: 'authenticated', event: 'SUCCESS', timestamp: 1234567891 },
-// ]
-
-// Export for visualization
-machine.exportDiagram('mermaid');
-// Returns:
-// ```mermaid
-// stateDiagram-v2
-//   [*] --> idle
-//   idle --> loading : LOGIN
-//   loading --> authenticated : SUCCESS
-//   loading --> idle : ERROR
-//   authenticated --> idle : LOGOUT
-// ```
-
-machine.exportDiagram('json'); // For custom visualization
-```
-
-```typescript
-// Enhanced debug mode
-observe({
-  endpoint: '/api/metrics',
-  debug: {
-    enabled: true,
-    grouped: true,        // Group related events in console
-    colors: true,         // Colorful output
-    timestamps: true,     // Show timestamps
-    filter: ['vital', 'error'], // Only show these types
-  },
-});
-
-// Console output:
-// ▼ [svoose] 14:32:15.123
-//   ├─ vital: LCP = 1234ms (good)
-//   ├─ vital: CLS = 0.05 (good)
-//   └─ transition: auth idle → loading
-```
-
-```typescript
-// Event replay for debugging
-import { createReplayableMachine } from 'svoose';
-
-const machine = createReplayableMachine({
-  id: 'wizard',
-  // ... config
-});
-
-// Record events
-machine.send('NEXT');
-machine.send('BACK');
-machine.send('SUBMIT');
-
-// Get recorded events
-const events = machine.getRecordedEvents();
-
-// Replay on another machine instance
-const replayMachine = createReplayableMachine({ /* same config */ });
-replayMachine.replay(events);
-// Machine is now in same state as original
-```
-
-#### Chrome Extension Features
-
-- View all active machines
-- Inspect current state and context
-- View transition history timeline
-- Send events manually
-- Time-travel debugging
-- Export/import machine state
-
-#### Технічні задачі
-
-- [ ] Devtools protocol design
-- [ ] Chrome extension boilerplate
-- [ ] History buffer implementation
-- [ ] Mermaid export
-- [ ] JSON export for visualization
-- [ ] Debug mode enhancements
-- [ ] Replay functionality
-- [ ] +15 нових тестів
-- [ ] Devtools documentation
+> ⚠️ **Scope обмежений свідомо**. FSM visualization, devtools extensions — це XState territory. Ми фокусуємося на observability.
 
 ---
 
-### 📋 v0.5.0 — Advanced FSM (Separate Entry Point)
+### 🔮 v1.0.0 — Stable Release
 
 **Статус**: Планується
-**Пріоритет**: Середній
-**Цільова дата**: Q4 2026
+**Цільова дата**: Q1 2027
 
-> ⚠️ **Архітектурне рішення**: Advanced FSM функції виносяться в окремий entry point
-> `svoose/machine` щоб зберегти core bundle малим. Базовий `createMachine()` залишається
-> в основному bundle (~0.8KB), а advanced features додають ~1KB окремо.
-
-#### Нові функції
-
-| Функція | Опис | Статус |
-|---------|------|--------|
-| `svoose/machine` entry | Окремий entry для advanced FSM | ⬜ Todo |
-| `invoke()` | Async operations в станах | ⬜ Todo |
-| `after()` | Delayed transitions | ⬜ Todo |
-| `always()` | Transient transitions | ⬜ Todo |
-| **`spawn()`** | Динамічне створення child machines | ⬜ Todo |
-| Enhanced Types | Краща type inference | ⬜ Todo |
-
-#### API Design
-
-```typescript
-// ✨ Окремий import для advanced features (tree-shakeable)
-// Базовий createMachine залишається в 'svoose'
-import { createMachine } from 'svoose';  // ~0.8KB — basic FSM
-
-// Advanced features — окремий entry point
-import { createAdvancedMachine } from 'svoose/machine';  // +~1KB
-
-// Або selective imports для максимального tree-shaking
-import { withInvoke, withAfter, withAlways } from 'svoose/machine';
-
-const basicMachine = createMachine({ /* ... */ });  // Базовий — без invoke/after
-const advancedMachine = createAdvancedMachine({ /* ... */ });  // Повний функціонал
-```
-
-```typescript
-// invoke() - Async operations
-const fetchMachine = createAdvancedMachine({
-  id: 'fetch',
-  initial: 'idle',
-  context: { data: null, error: null },
-  states: {
-    idle: {
-      on: { FETCH: 'loading' },
-    },
-    loading: {
-      invoke: {
-        // Async function to run when entering state
-        src: async (ctx, event) => {
-          const response = await fetch(`/api/users/${event.id}`);
-          if (!response.ok) throw new Error('Failed to fetch');
-          return response.json();
-        },
-        // On successful completion
-        onDone: {
-          target: 'success',
-          action: (ctx, event) => ({ data: event.data }),
-        },
-        // On error
-        onError: {
-          target: 'error',
-          action: (ctx, event) => ({ error: event.error.message }),
-        },
-      },
-    },
-    success: {
-      on: { RESET: 'idle' },
-    },
-    error: {
-      on: { RETRY: 'loading' },
-    },
-  },
-});
-```
-
-```typescript
-// after() - Delayed transitions
-const notificationMachine = createAdvancedMachine({
-  id: 'notification',
-  initial: 'hidden',
-  context: { message: '' },
-  states: {
-    hidden: {
-      on: {
-        SHOW: {
-          target: 'visible',
-          action: (ctx, e) => ({ message: e.message }),
-        },
-      },
-    },
-    visible: {
-      after: {
-        // Auto-hide after 5 seconds
-        5000: 'hidden',
-
-        // Or with condition
-        3000: {
-          target: 'hidden',
-          guard: (ctx) => ctx.message.length < 50, // Short messages hide faster
-        },
-      },
-      on: {
-        DISMISS: 'hidden',
-      },
-    },
-  },
-});
-```
-
-```typescript
-// always() - Transient transitions (immediate, condition-based)
-const formMachine = createAdvancedMachine({
-  id: 'form',
-  initial: 'editing',
-  context: { fields: {}, errors: [] },
-  states: {
-    editing: {
-      on: { SUBMIT: 'validating' },
-    },
-    validating: {
-      // Immediately transition based on condition
-      always: [
-        {
-          target: 'error',
-          guard: (ctx) => ctx.errors.length > 0,
-        },
-        {
-          target: 'submitting',
-          // No guard = default transition
-        },
-      ],
-    },
-    submitting: {
-      invoke: { /* ... */ },
-    },
-    error: {
-      on: { EDIT: 'editing' },
-    },
-    success: {},
-  },
-});
-```
-
-```typescript
-// ✨ NEW: spawn() — динамічне створення child machines
-const todoListMachine = createAdvancedMachine({
-  id: 'todoList',
-  initial: 'idle',
-  context: {
-    todos: [] as Array<{ id: string; ref: MachineRef }>,
-  },
-  states: {
-    idle: {
-      on: {
-        ADD_TODO: {
-          action: (ctx, event) => {
-            // Створюємо child machine для кожного todo
-            const todoRef = spawn(todoMachine, {
-              id: `todo-${event.id}`,
-              input: { text: event.text },
-            });
-
-            return {
-              todos: [...ctx.todos, { id: event.id, ref: todoRef }],
-            };
-          },
-        },
-        REMOVE_TODO: {
-          action: (ctx, event) => {
-            const todo = ctx.todos.find((t) => t.id === event.id);
-            if (todo) {
-              // Зупиняємо child machine
-              todo.ref.stop();
-            }
-            return {
-              todos: ctx.todos.filter((t) => t.id !== event.id),
-            };
-          },
-        },
-      },
-    },
-  },
-});
-
-// Child machine
-const todoMachine = createAdvancedMachine({
-  id: 'todo',
-  initial: 'active',
-  context: { text: '', completed: false },
-  states: {
-    active: {
-      on: { TOGGLE: 'completed' },
-    },
-    completed: {
-      on: { TOGGLE: 'active' },
-    },
-  },
-});
-```
-
-#### Технічні задачі
-
-- [ ] **Створити `src/machine/` директорію для advanced features**
-- [ ] **`createAdvancedMachine()` wrapper з plugins**
-- [ ] `invoke()` implementation з Promise handling
-- [ ] `after()` implementation з timer management
-- [ ] `always()` implementation
-- [ ] **`spawn()` implementation з lifecycle management**
-- [ ] Cleanup timers on destroy
-- [ ] Cancel invoke on exit
-- [ ] **Stop spawned machines on parent destroy**
-- [ ] Type inference для invoke events
-- [ ] **Окремий package.json export для `svoose/machine`**
-- [ ] +25 нових тестів
-- [ ] Migration guide від базової FSM
-
----
-
-### 📋 v0.6.0 — Ecosystem Plugins
-
-**Статус**: Планується
-**Пріоритет**: Низький
-**Цільова дата**: 2027
-
-#### Плагіни
-
-| Пакет | Опис |
-|-------|------|
-| `@svoose/sentry` | Sentry error tracking integration |
-| `@svoose/datadog` | Datadog RUM transport |
-| `@svoose/posthog` | PostHog analytics transport |
-| `@svoose/mixpanel` | Mixpanel events transport |
-| `@svoose/amplitude` | Amplitude analytics transport |
-
-#### API Design
-
-```typescript
-// @svoose/sentry
-import { createSentryTransport } from '@svoose/sentry';
-import * as Sentry from '@sentry/svelte';
-
-observe({
-  transport: createSentryTransport(Sentry, {
-    // Map svoose events to Sentry
-    vitals: true,         // Send as Sentry Web Vitals
-    errors: true,         // Send as Sentry exceptions
-    transitions: false,   // Don't send transitions
-
-    // Custom tags
-    tags: {
-      environment: 'production',
-      version: '1.0.0',
-    },
-  }),
-});
-```
-
-```typescript
-// @svoose/posthog
-import { createPostHogTransport } from '@svoose/posthog';
-import posthog from 'posthog-js';
-
-observe({
-  transport: createPostHogTransport(posthog, {
-    // Map svoose events to PostHog
-    vitals: {
-      enabled: true,
-      prefix: 'web_vital_', // Events: web_vital_lcp, web_vital_cls, etc.
-    },
-    errors: {
-      enabled: true,
-      eventName: 'error_occurred',
-    },
-    transitions: {
-      enabled: true,
-      eventName: 'state_transition',
-    },
-  }),
-});
-```
+**Критерії для v1.0:**
+- [ ] 6+ місяців без breaking changes
+- [ ] 1000+ weekly npm downloads
+- [ ] Production use cases documented
+- [ ] Full SvelteKit integration
+- [ ] Community contributions
 
 ---
 
 ## Bundle Size Targets
 
-| Версія | Core Bundle | observe() | createMachine() | Додатково |
-|--------|-------------|-----------|-----------------|-----------|
-| v0.1.x | ~3.0 KB | ~2.1 KB | ~0.8 KB | — |
-| v0.2.0 | ~3.5 KB | ~2.5 KB | ~0.8 KB | +transport: ~0.5KB |
-| v0.3.0 | ~3.5 KB | ~2.5 KB | ~0.8 KB | +sveltekit: ~1.2KB, +vite: ~0.8KB |
-| v0.4.0 | ~4.0 KB | ~2.5 KB | ~1.0 KB | +devtools: ~1.5KB |
-| v0.5.0 | ~4.0 KB | ~2.5 KB | ~0.8 KB | +machine: ~1.2KB (advanced FSM) |
+| Версія | Core | Transport | SvelteKit | Attribution |
+|--------|------|-----------|-----------|-------------|
+| v0.1.2 | 3.0 KB | — | — | — |
+| v0.1.3 | 3.1 KB | — | — | — |
+| v0.1.4 | 3.1 KB | — | — | — | (hotfix)
+| v0.1.5 | 3.2 KB | — | — | — |
+| v0.1.6 | 3.25 KB | — | — | — |
+| v0.1.7 | 3.4 KB | — | — | — |
+| v0.1.8 | 3.55 KB | — | — | — |
+| v0.1.9 | 3.7 KB | — | — | — |
+| v0.1.10 | 3.85 KB | — | — | — |
+| **v0.2.0** | **4.1 KB** | — | — | — |
+| v0.3.0 | 4.1 KB | — | +1.5 KB | +1.5 KB |
 
-### Entry Points Summary (v0.5.0+)
-
-| Entry Point | Розмір | Що включає |
-|-------------|--------|------------|
-| `svoose` | ~4.0 KB | Core: observe(), createMachine(), useMachine() |
-| `svoose/transport` | ~0.5 KB | Retry, beacon, hybrid transports |
-| `svoose/sveltekit` | ~1.2 KB | Server/client hooks, navigation |
-| `svoose/vite` | ~0.8 KB | Vite plugin для auto-instrumentation |
-| `svoose/machine` | ~1.2 KB | Advanced FSM: invoke, after, always, spawn |
-| `svoose/devtools` | ~1.5 KB | Chrome extension connector |
-
-> 💡 **Tree-shaking**: Всі entry points tree-shakeable. Імпортуйте тільки те, що потрібно.
+> Tree-shaking дозволяє імпортувати тільки потрібне. Реальний bundle залежить від використаних features.
 
 ---
 
-## Test Coverage Targets
+## Known Risks & Mitigations
 
-| Версія | Тести | Покриття |
-|--------|-------|----------|
-| v0.1.x | 90 | ~75% |
-| v0.2.0 | 120 | ~80% |
-| v0.3.0 | 140 | ~82% |
-| v0.4.0 | 155 | ~85% |
-| v0.5.0 | 180 | ~87% |
+### Technical Risks
 
----
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| sendBeacon 64KB limit | Large payloads fail | Auto-chunking, payload size validation |
+| localStorage quota | Offline queue full | FIFO eviction, graceful degradation |
+| Vite plugin complexity | Auto-instrumentation breaks | Manual wrapper as primary, plugin as opt-in |
+| Safari private mode | Storage unavailable | Memory fallback, feature detection |
 
-## Технічний Борг (Кожен Реліз)
+### Legal/Compliance Risks
 
-### Постійні задачі
-
-- [ ] Svelte component тести (@testing-library/svelte)
-- [ ] Browser compatibility matrix документація
-- [ ] Performance benchmarks vs competitors
-- [ ] Security audit для transport layer
-- [ ] Changelog оновлення
-- [ ] README оновлення
-- [ ] TypeDoc генерація
-
-### v0.2.0 Cleanup
-
-- [ ] Рефакторинг error context для multiple machines
-- [ ] Уніфікація guard signature (can() vs send())
-- [ ] Покращення error messages
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| "GDPR-compliant" claims | False compliance impression | Use "privacy-focused", add legal disclaimer |
+| PII in error stacks | Accidental data leak | Default scrubbing, documentation |
+| User tracking without consent | Legal issues | All tracking opt-in, clear documentation |
 
 ---
 
-## Competitor Tracking
+## API Examples (v0.2.0)
 
-### vs XState
+```typescript
+// Sampling (v0.1.3)
+observe({
+  endpoint: '/api/metrics',
+  sampling: {
+    vitals: 0.1,      // 10% Web Vitals
+    errors: 1.0,      // 100% помилок
+    custom: 0.5,      // 50% custom метрик
+    transitions: 0.0, // state helper transitions disabled
+  },
+});
+```
 
-| Функція | svoose | XState | Пріоритет |
-|---------|--------|--------|-----------|
-| Basic FSM | ✅ | ✅ | — |
-| invoke/spawn | v0.5 | ✅ | Low |
-| Parallel states | — | ✅ | — |
-| History states | — | ✅ | — |
-| Devtools | v0.4 | ✅ | Medium |
-| Svelte 5 native | ✅ | Plugin | — |
-| Web Vitals | ✅ | — | — |
-| Error tracking | ✅ | — | — |
-| Bundle size | 3KB | 11KB | — |
+```typescript
+// Session Tracking (v0.1.4)
+observe({
+  endpoint: '/api/metrics',
+  session: {
+    timeout: 30 * 60 * 1000,  // 30 хв = нова сесія
+    storage: 'sessionStorage',
+  },
+});
+```
 
-**Стратегія**: Не конкурувати з XState на FSM функціях. Фокус на observability + Svelte integration.
+```typescript
+// Custom Metrics (v0.1.5 - v0.1.6)
+import { observe, metric, counter, gauge, histogram, createTypedMetric } from 'svoose';
+
+observe({ endpoint: '/api/metrics', vitals: true, errors: true });
+
+// Basic metric (v0.1.5)
+metric('checkout_started', { step: 1, cartTotal: 99.99 });
+
+// Extended metrics (v0.1.6)
+counter('api_calls', { endpoint: '/users' });
+gauge('active_users', 42);
+histogram('response_time', 234);
+
+// Typed Metrics (v0.1.6 - повний autocomplete)
+type AppMetrics = {
+  checkout_started: { step: number; cartTotal: number };
+  feature_used: { name: string; enabled: boolean };
+};
+
+const track = createTypedMetric<AppMetrics>();
+track('checkout_started', { step: 1, cartTotal: 99.99 }); // ✅ autocomplete
+track('checkout_started', { wrong: 'field' });            // ❌ TS error
+```
+
+```typescript
+// Retry + Beacon Transport (v0.1.7 - v0.1.8)
+import { createHybridTransport } from 'svoose/transport';
+
+observe({
+  transport: createHybridTransport('/api/metrics', {
+    default: 'fetch',
+    onUnload: 'beacon',
+    retry: { attempts: 3, backoff: 'exponential' },
+  }),
+});
+```
+
+```typescript
+// Privacy Utilities (v0.1.9)
+import { observe, configurePII } from 'svoose';
+
+configurePII({
+  scrubFromUrl: ['token', 'api_key', 'email'],
+  maskFields: ['email', 'phone'],
+});
+```
+
+```typescript
+// Full Production Setup (v0.2.0)
+import { observe, configurePII, identify } from 'svoose';
+import { createHybridTransport } from 'svoose/transport';
+
+configurePII({
+  scrubFromUrl: ['token', 'api_key'],
+  maskFields: ['email', 'phone'],
+});
+
+observe({
+  endpoint: '/api/metrics',
+  vitals: true,
+  errors: true,
+  sampling: { vitals: 0.1, errors: 1.0, custom: 0.5 },
+  session: { timeout: 30 * 60 * 1000, storage: 'sessionStorage' },
+  networkAware: true,
+  offlineStorage: 'localStorage',
+  maxOfflineEvents: 1000,
+  transport: createHybridTransport('/api/metrics', {
+    default: 'fetch',
+    onUnload: 'beacon',
+    retry: { attempts: 3, backoff: 'exponential' },
+  }),
+});
+
+// User identification
+identify({ id: 'user_123', traits: { plan: 'premium' } });
+identify(null); // logout
+```
+
+---
+
+## Competitor Positioning
+
+### svoose + XState = Complementary Tools
+
+| Потреба | Рішення |
+|---------|---------|
+| **Observability** (vitals, errors, metrics) | svoose ✅ |
+| **Simple UI states** (loading → success → error) | svoose FSM ✅ |
+| **Complex state machines** (invoke, spawn, parallel) | XState ✅ |
+| **Both observability + complex FSM** | svoose + XState разом |
+
+> **Філософія**: svoose FSM — це "Svelte $state() з transitions". Для серйозних state machines — XState. Ми не конкуруємо, ми доповнюємо.
 
 ### vs web-vitals
 
-| Функція | svoose | web-vitals | Пріоритет |
-|---------|--------|------------|-----------|
-| Web Vitals | ✅ | ✅ | — |
-| Batching | ✅ | Manual | — |
-| Error tracking | ✅ | — | — |
-| FSM | ✅ | — | — |
-| Custom metrics | v0.2 | Manual | High |
-| SvelteKit | v0.3 | — | High |
+| Feature | svoose | web-vitals |
+|---------|--------|------------|
+| Web Vitals | ✅ | ✅ |
+| Batching | ✅ | Manual |
+| Error tracking | ✅ | — |
+| Custom metrics | v0.2 | Manual |
+| SvelteKit integration | v0.3 | — |
 
-**Стратегія**: Інтегроване рішення для Svelte проектів, не просто vitals.
+**Стратегія**: Інтегроване рішення для Svelte, не просто vitals wrapper.
+
+### vs Vercel Analytics / PostHog
+
+| Feature | svoose | Vercel Analytics | PostHog |
+|---------|--------|------------------|---------|
+| Open source | ✅ | ❌ | ✅ |
+| Self-hosted | ✅ | ❌ | ✅ |
+| Svelte-native | ✅ | ❌ | ❌ |
+| Bundle size | 4KB | ~5KB | ~30KB+ |
+| Free tier | ∞ | Limited | Limited |
+| Setup complexity | Low | Zero | Medium |
+
+**Стратегія**: Open source альтернатива з Svelte-first DX.
 
 ---
 
 ## Release Process
 
-### Для кожного релізу
-
-1. **Feature freeze** — 2 тижні до релізу
-2. **Testing phase** — всі тести повинні проходити
-3. **Documentation** — README, CHANGELOG, migration guide
-4. **Beta release** — `npm publish --tag beta`
-5. **Community feedback** — 1 тиждень
-6. **Stable release** — `npm publish`
-7. **Announcement** — GitHub, Twitter, Svelte Discord
+1. **Feature development** — 2-week sprints
+2. **Testing phase** — all tests pass, coverage > 80%
+3. **Beta release** — `npm publish --tag beta`
+4. **Feedback period** — 1 week minimum
+5. **Stable release** — `npm publish`
+6. **Announcement** — GitHub, Svelte Discord
 
 ### Versioning
 
-- **Patch** (0.1.x): Bug fixes, documentation
+- **Patch** (0.x.y): Bug fixes, docs
 - **Minor** (0.x.0): New features, backward compatible
-- **Major** (x.0.0): Breaking changes (not planned until v1.0)
+- **Major** (x.0.0): Breaking changes (not before v1.0)
 
 ---
 
 ## Contributing
-
-Якщо хочете допомогти з розробкою:
 
 1. Перегляньте Issues з лейблом `help wanted`
 2. Виберіть задачу з поточної версії
 3. Створіть PR з тестами
 4. Документація обов'язкова для нових API
 
-### Priority Labels
+---
 
-- `critical` — блокує реліз
-- `high` — важливо для релізу
-- `medium` — бажано для релізу
-- `low` — можна відкласти
+## Timeline Overview
+
+```
+2026
+├── Jan          v0.1.2 ✅
+├── Jan          v0.1.3 ✅ — Sampling (з багом)
+├── Jan 24       v0.1.4 ✅ — Hotfix: sampling.js (current)
+│
+├── Feb Week 2   v0.1.5 — Session Tracking + Vitals Filter
+├── Feb Week 3   v0.1.6 — Basic Custom Metrics
+├── Feb Week 4   v0.1.7 — Extended Metrics + Typed API
+│
+├── Mar Week 1   v0.1.8 — Retry Logic
+├── Mar Week 2   v0.1.9 — Beacon + Hybrid Transport
+├── Mar Week 3   v0.1.10 — Privacy Utilities
+├── Mar Week 4   v0.2.0 — Production-Ready Observability ⭐ (major)
+│
+├── May-Jun      v0.3.0 — SvelteKit Integration ⭐⭐
+│
+├── Q3-Q4        v0.4.0 — DX (CLI, Dashboard)
+│
+2027
+└── Q1-Q2        v1.0.0 — Stable Release 🎉
+```
 
 ---
 
@@ -1090,10 +799,13 @@ observe({
 | Дата | Версія | Зміни |
 |------|--------|-------|
 | 2026-01-20 | 1.0 | Початковий план |
-| 2026-01-21 | 1.1 | **Розширений v0.2.0**: Typed Metrics API, Sampling, Session/User tracking, sendBeacon transport, Privacy utilities |
-| | | **Розширений v0.3.0**: Vite plugin auto-instrumentation, Attribution API, Soft Navigation tracking |
-| | | **Оновлений v0.5.0**: Окремий entry point `svoose/machine` для advanced FSM, spawn() |
-| | | **Нова структура**: Entry Points Summary таблиця, оновлені bundle size targets |
+| 2026-01-21 | 1.1 | Розширений v0.2.0, v0.3.0 |
+| 2026-01-22 | 2.0 | Major revision: реалістичні targets, risk mitigations |
+| 2026-01-22 | 3.0 | Restructure: v0.2.0 split → v0.2.0/v0.2.1/v0.2.2, продуктова стратегія |
+| 2026-01-22 | 4.0 | Incremental releases: v0.1.3-v0.2.4 patch releases, 2-тижневі sprints |
+| 2026-01-22 | 5.0 | Weekly releases: v0.1.3→v0.2.0, removed v0.5.0 Advanced FSM |
+| 2026-01-22 | 6.0 | **FSM positioning**: FSM як "lightweight state helper (bonus)", не окремий продукт. XState = complementary tool, не конкурент |
+| 2026-01-24 | 7.0 | **v0.1.4 hotfix**: виправлено missing sampling.js; **vitalsFilter** додано в v0.1.5 для CLS noise filtering |
 
 ---
 
