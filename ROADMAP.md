@@ -174,10 +174,39 @@ track('checkout', { step: 1, total: 99 }); // autocomplete
 
 ---
 
-#### v0.1.8 — Retry Logic
+#### v0.1.8 — Beacon + Hybrid Transport
 
 **Status**: Planned
 **Target**: March 2026, Week 1
+
+> **Why first?** Beacon solves a critical problem — data loss on page close. More important than retry.
+
+| Feature | Description |
+|---------|-------------|
+| **sendBeacon Transport** | Reliable sending on page close |
+| **Payload Chunking** | Auto-split for payloads > 60KB |
+| **Hybrid Transport** | fetch + beacon auto-switch on unload |
+
+**Bundle**: ~3.9 KB (+0.2 KB)
+
+```typescript
+import { createHybridTransport } from 'svoose/transport';
+
+// Recommended for production
+observe({
+  transport: createHybridTransport('/api/metrics', {
+    default: 'fetch',
+    onUnload: 'beacon',  // reliable on page close
+  }),
+});
+```
+
+---
+
+#### v0.1.9 — Retry Logic
+
+**Status**: Planned
+**Target**: March 2026, Week 2
 
 | Feature | Description |
 |---------|-------------|
@@ -187,7 +216,7 @@ track('checkout', { step: 1, total: 99 }); // autocomplete
 | **Timeout** | AbortController timeout for fetch |
 | **Unload check** | Abort retry on page close |
 
-**Bundle**: ~3.9 KB (+0.2 KB)
+**Bundle**: ~4.1 KB (+0.2 KB)
 
 ```typescript
 import { createFetchTransport } from 'svoose/transport';
@@ -200,31 +229,14 @@ const transport = createFetchTransport('/api/metrics', {
   },
   timeout: 10000,
 });
-```
 
----
-
-#### v0.1.9 — Beacon + Hybrid Transport
-
-**Status**: Planned
-**Target**: March 2026, Week 2
-
-| Feature | Description |
-|---------|-------------|
-| **sendBeacon Transport** | Reliable sending on page close |
-| **Payload Chunking** | Auto-split for payloads > 60KB |
-| **Hybrid Transport** | fetch + beacon auto-switch on unload |
-
-**Bundle**: ~4.1 KB (+0.2 KB)
-
-```typescript
+// Or with hybrid transport
 import { createHybridTransport } from 'svoose/transport';
 
-// Recommended for production
 observe({
   transport: createHybridTransport('/api/metrics', {
     default: 'fetch',
-    onUnload: 'beacon',  // reliable on page close
+    onUnload: 'beacon',
     retry: { attempts: 3, backoff: 'exponential' },
   }),
 });
@@ -423,8 +435,8 @@ export default defineConfig({
 ├── Feb Week 3   v0.1.6 — Basic Custom Metrics
 ├── Feb Week 4   v0.1.7 — Extended Metrics + Typed API
 │
-├── Mar Week 1   v0.1.8 — Retry Logic
-├── Mar Week 2   v0.1.9 — Beacon + Hybrid Transport
+├── Mar Week 1   v0.1.8 — Beacon + Hybrid Transport
+├── Mar Week 2   v0.1.9 — Retry Logic
 ├── Mar Week 3   v0.1.10 — Privacy Utilities
 ├── Mar Week 4   v0.2.0 — Production-Ready Observability (major)
 │
