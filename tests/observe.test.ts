@@ -514,6 +514,171 @@ describe('observe', () => {
     });
   });
 
+  describe('session tracking', () => {
+    it('should add sessionId to events when session is enabled', () => {
+      const sentEvents: ObserveEvent[] = [];
+      const transport: Transport = {
+        send: (events) => sentEvents.push(...events),
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        session: true,
+        batchSize: 1,
+      });
+
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      expect(sentEvents).toHaveLength(1);
+      expect((sentEvents[0] as any).sessionId).toBeDefined();
+      expect(typeof (sentEvents[0] as any).sessionId).toBe('string');
+
+      cleanup();
+    });
+
+    it('should NOT add sessionId when session is disabled', () => {
+      const sentEvents: ObserveEvent[] = [];
+      const transport: Transport = {
+        send: (events) => sentEvents.push(...events),
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        session: false,
+        batchSize: 1,
+      });
+
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      expect(sentEvents).toHaveLength(1);
+      expect((sentEvents[0] as any).sessionId).toBeUndefined();
+
+      cleanup();
+    });
+
+    it('should NOT add sessionId when session option is not provided', () => {
+      const sentEvents: ObserveEvent[] = [];
+      const transport: Transport = {
+        send: (events) => sentEvents.push(...events),
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 1,
+      });
+
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      expect(sentEvents).toHaveLength(1);
+      expect((sentEvents[0] as any).sessionId).toBeUndefined();
+
+      cleanup();
+    });
+
+    it('should use same sessionId for all events in same session', () => {
+      const sentEvents: ObserveEvent[] = [];
+      const transport: Transport = {
+        send: (events) => sentEvents.push(...events),
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        session: true,
+        batchSize: 1,
+      });
+
+      const observer = getGlobalObserver();
+
+      // Send multiple events
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'b',
+        to: 'c',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      expect(sentEvents).toHaveLength(2);
+      expect((sentEvents[0] as any).sessionId).toBe((sentEvents[1] as any).sessionId);
+
+      cleanup();
+    });
+
+    it('should support custom session config', () => {
+      const sentEvents: ObserveEvent[] = [];
+      const transport: Transport = {
+        send: (events) => sentEvents.push(...events),
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        session: {
+          timeout: 60 * 60 * 1000, // 1 hour
+          storage: 'memory',
+        },
+        batchSize: 1,
+      });
+
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      expect(sentEvents).toHaveLength(1);
+      expect((sentEvents[0] as any).sessionId).toBeDefined();
+
+      cleanup();
+    });
+  });
+
   describe('edge cases', () => {
     it('should handle empty filter function gracefully', () => {
       const sentEvents: ObserveEvent[] = [];

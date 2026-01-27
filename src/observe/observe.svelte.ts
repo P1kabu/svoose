@@ -10,6 +10,7 @@ import {
   eventTypeToSamplingType,
   type Sampler,
 } from './sampling.js';
+import { createSessionManager, type SessionManager } from './session.js';
 import type { ObserveOptions, VitalEvent, ObserveEvent, Transport } from '../types/index.js';
 
 // Default configuration
@@ -21,7 +22,7 @@ const defaults = {
   flushInterval: 5000,
   sampleRate: 1,
   debug: false,
-} satisfies Required<Omit<ObserveOptions, 'transport' | 'filter' | 'sampling'>>;
+} satisfies Required<Omit<ObserveOptions, 'transport' | 'filter' | 'sampling' | 'session'>>;
 
 // Global observer callback for state machines
 let globalObserverCallback: ((event: ObserveEvent) => void) | null = null;
@@ -75,7 +76,17 @@ export function observe(options: ObserveOptions = {}): () => void {
     ? createSampler(config.sampling)
     : null;
 
+  // Create session manager if session option is provided
+  const sessionManager: SessionManager | null = config.session != null
+    ? createSessionManager(config.session)
+    : null;
+
   const cleanups: (() => void)[] = [];
+
+  // Cleanup session manager on destroy
+  if (sessionManager) {
+    cleanups.push(() => sessionManager.destroy());
+  }
   const buffer: ObserveEvent[] = [];
   let flushTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -101,6 +112,11 @@ export function observe(options: ObserveOptions = {}): () => void {
       if (samplingType && !sampler.shouldSample(samplingType)) {
         return;
       }
+    }
+
+    // Add sessionId if session manager is enabled
+    if (sessionManager) {
+      (event as ObserveEvent & { sessionId?: string }).sessionId = sessionManager.getSessionId();
     }
 
     if (config.debug) {

@@ -27,6 +27,7 @@ export interface ErrorEvent {
   colno?: number;
   timestamp: number;
   url: string;
+  sessionId?: string;
   machineId?: string;
   machineState?: string;
 }
@@ -36,6 +37,7 @@ export interface UnhandledRejectionEvent {
   reason: string;
   timestamp: number;
   url: string;
+  sessionId?: string;
   machineId?: string;
   machineState?: string;
 }
@@ -54,6 +56,7 @@ export interface VitalEvent {
   delta: number;
   timestamp: number;
   url: string;
+  sessionId?: string;
 }
 
 // ============================================
@@ -67,6 +70,7 @@ export interface TransitionEvent {
   to: string;
   event: string;
   timestamp: number;
+  sessionId?: string;
   context?: Record<string, unknown>;
 }
 
@@ -89,6 +93,25 @@ export interface TransportOptions {
   headers?: Record<string, string>;
   onError?: (error: Error) => void;
 }
+
+// ============================================
+// Session Types
+// ============================================
+
+/**
+ * Session configuration
+ */
+export interface SessionConfig {
+  /** Session timeout in milliseconds (default: 30 minutes) */
+  timeout: number;
+  /** Storage type for session persistence */
+  storage: 'sessionStorage' | 'localStorage' | 'memory';
+}
+
+/**
+ * Session option - true = defaults, false = disabled, object = custom config
+ */
+export type SessionOption = boolean | Partial<SessionConfig>;
 
 // ============================================
 // Sampling Types
@@ -156,6 +179,26 @@ export interface ObserveOptions {
    * }
    */
   sampling?: SamplingOption;
+
+  /**
+   * Session tracking configuration
+   *
+   * @example
+   * // Enable with defaults (30 min timeout, sessionStorage)
+   * session: true
+   *
+   * @example
+   * // Custom config
+   * session: {
+   *   timeout: 60 * 60 * 1000, // 1 hour
+   *   storage: 'localStorage',
+   * }
+   *
+   * @example
+   * // Disable explicitly
+   * session: false
+   */
+  session?: SessionOption;
 
   /**
    * @deprecated Use `sampling` instead. Will be removed in v0.3.0.

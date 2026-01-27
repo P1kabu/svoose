@@ -2,7 +2,7 @@
 
 > Svelte + Goose = **svoose** — the goose that sees everything
 
-Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **< 3KB gzipped**.
+Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **< 5KB gzipped**.
 
 ## Features
 
@@ -61,10 +61,12 @@ Start collecting Web Vitals and errors.
 
 ```typescript
 const cleanup = observe({
-  // Where to send data
+  // Where to send data (Option 1: endpoint)
   endpoint: '/api/metrics',
 
-  // Or use custom transport
+  // Or use custom transport (Option 2: transport)
+  // NOTE: endpoint and transport are mutually exclusive
+  // If transport is provided, endpoint is ignored
   transport: myTransport,
 
   // What to collect
@@ -93,6 +95,8 @@ const cleanup = observe({
 cleanup();
 ```
 
+> **Note**: If neither `endpoint` nor `transport` is provided, defaults to `endpoint: '/api/observe'`.
+
 #### Sampling (v0.1.3+)
 
 Control what percentage of events are sent to your backend:
@@ -118,6 +122,81 @@ observe({
 ```
 
 > **Note**: `sampleRate` is deprecated. Use `sampling` instead.
+
+#### Sessions (v0.1.5+)
+
+Automatic session tracking with configurable timeout:
+
+```typescript
+observe({
+  endpoint: '/api/metrics',
+
+  // Enable with defaults (30 min timeout, sessionStorage)
+  session: true,
+
+  // Or custom config
+  session: {
+    timeout: 60 * 60 * 1000,  // 1 hour in milliseconds = new session after 1h inactivity
+    storage: 'localStorage',   // 'sessionStorage' | 'localStorage' | 'memory'
+  },
+});
+
+// All events now include sessionId:
+// { type: 'vital', name: 'LCP', value: 1234, sessionId: '1706123456789-abc123def' }
+```
+
+> **Note**: `timeout` is in **milliseconds**. Common values: `30 * 60 * 1000` (30 min), `60 * 60 * 1000` (1 hour).
+
+**Storage options:**
+- `sessionStorage` (default) — session per browser tab
+- `localStorage` — session persists across tabs
+- `memory` — no persistence, new session on page reload
+
+**Features:**
+- Automatic session ID generation (timestamp + random)
+- Session expires after inactivity timeout (default: 30 min)
+- Graceful degradation in private mode
+- SSR safe
+
+#### Web Vitals (v0.1.5+)
+
+svoose collects all Core Web Vitals using the standard [web-vitals](https://github.com/GoogleChrome/web-vitals) algorithm:
+
+| Metric | What it measures | When reported |
+|--------|------------------|---------------|
+| **CLS** | Visual stability (layout shifts) | On page hide/visibility change |
+| **LCP** | Loading performance | On user input or visibility change |
+| **INP** | Responsiveness (max interaction) | On page hide/visibility change |
+| **FCP** | First content painted | Once |
+| **TTFB** | Server response time | Once |
+| **FID** | First input delay (deprecated) | Once |
+
+**Web Vitals Reporting (v0.1.5+)**:
+
+All vitals follow the [web-vitals](https://github.com/GoogleChrome/web-vitals) standard:
+
+**CLS (Cumulative Layout Shift)**:
+- Groups shifts into sessions (max 5s, max 1s gap)
+- Reports maximum session value on page hide
+
+**LCP (Largest Contentful Paint)**:
+- Tracks largest content element painted
+- Finalized on first user interaction (click/keydown) or visibility change
+
+**INP (Interaction to Next Paint)**:
+- Tracks maximum interaction duration
+- Only counts discrete events with `interactionId` (ignores scroll, etc.)
+- Reports on page hide
+
+```typescript
+// All vitals report automatically on page lifecycle events
+observe({ vitals: true });
+
+// Select specific vitals
+observe({ vitals: ['CLS', 'LCP', 'INP'] });
+```
+
+> **Note (v0.1.5 breaking change)**: CLS, LCP, and INP now report once per page lifecycle instead of on every update. This matches Chrome DevTools and Google Search Console behavior.
 
 ### `createMachine(config)`
 
@@ -239,25 +318,43 @@ const transport = createFetchTransport('/api/metrics', {
   headers: { 'Authorization': 'Bearer xxx' },
   onError: (err) => console.error(err),
 });
+observe({ transport });
 
-// Console (for development)
+// Console only (for development) — no network requests
 observe({ transport: createConsoleTransport({ pretty: true }) });
 
-// Custom transport
+// Noop (silent, for production without backend)
+observe({ transport: { send: () => {} } });
+
+// Custom transport (Sentry, Datadog, etc.)
 const myTransport = {
   async send(events) {
     await myApi.track(events);
   },
 };
+observe({ transport: myTransport });
+
+// Dev vs Prod pattern
+const isDev = import.meta.env.DEV;
+observe({
+  transport: isDev
+    ? createConsoleTransport({ pretty: true })
+    : createFetchTransport('/api/metrics'),
+});
 ```
 
 ## Bundle Size
 
+Tree-shakeable — pay only for what you use:
+
 | Import | Size (gzip) |
 |--------|-------------|
-| Full bundle | ~3.0 KB |
-| `observe()` only | ~2.1 KB |
+| `observe()` core | ~2.5 KB |
 | `createMachine()` only | ~0.8 KB |
+| Full bundle (v0.1.x) | ~3.5 KB |
+| Full production (v0.2.0+) | ~5.5 KB |
+
+> Most apps only need `observe()` core (~2.5 KB). Compare: Sentry ~20KB, PostHog ~40KB.
 
 ## TypeScript
 
@@ -402,10 +499,12 @@ const machine = createMachine({
 
 ## Roadmap
 
-- **v0.1.3-v0.1.9** — Incremental features (sampling, sessions, custom metrics, retry, privacy)
-- **v0.2.0** — Production-Ready Observability (network awareness, offline queue, user identification)
+- **v0.1.3** ✅ — Sampling (per-event-type rate limiting)
+- **v0.1.4** ✅ — Hotfix (missing sampling.js)
+- **v0.1.5** — Session Tracking + CLS Session Windows fix
+- **v0.1.6-v0.1.10** — Custom metrics, retry, beacon transport, privacy
+- **v0.2.0** — Production-Ready Observability + Bundle Restructure (modular entry points)
 - **v0.3.0** — SvelteKit Integration (Vite plugin, hooks, route tracking)
-- **v0.4.0** — Developer Experience (CLI, dashboard template)
 - **v1.0.0** — Stable Release (Q1 2027)
 
 > **Note**: FSM is a lightweight bonus feature, not an XState competitor. For complex state machines, use XState.

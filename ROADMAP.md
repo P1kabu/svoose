@@ -5,7 +5,7 @@
 ## Філософія Розвитку
 
 1. **Svelte-first** — кожна функція оптимізована для Svelte 5 екосистеми
-2. **Lightweight** — bundle size < 5KB залишається пріоритетом
+2. **Lightweight** — core ~2.5KB, full production ~5.5KB (tree-shakeable)
 3. **Zero dependencies** — ніяких runtime залежностей
 4. **Observability focus** — FSM як легке доповнення, не конкурент XState
 5. **Production-ready** — кожен реліз готовий до production
@@ -144,22 +144,42 @@ svoose → "Svelte 5 observability toolkit"
 
 ---
 
-### 📋 v0.1.5 — Session Tracking + Vitals Filter
+### ✅ v0.1.5 — Session Tracking + Web Vitals Fix (web-vitals standard)
 
-**Статус**: Планується
-**Пріоритет**: Critical
-**Цільова дата**: Лютий 2026, Week 2
+**Статус**: Випущено
+**Дата релізу**: 27 Січня 2026
 
-| Функція | Опис |
-|---------|------|
-| **Session Tracking** | Автоматичний sessionId з timeout |
-| **vitalsFilter** | Callback для фільтрації Web Vitals (CLS noise від анімацій) |
+| Функція | Опис | Статус |
+|---------|------|--------|
+| **Web Vitals Fix** | CLS, LCP, INP, TTFB згідно web-vitals стандарту | ✅ Done |
+| **Session Tracking** | Автоматичний sessionId з timeout | ✅ Done |
 
-**Bundle**: 3.2 KB (+0.1 KB)
+**Bundle**: 3.5 KB (+0.4 KB)
+
+#### ✅ Web Vitals Fix (Breaking Change в поведінці)
+
+Всі Web Vitals виправлено згідно з [web-vitals standard](https://github.com/GoogleChrome/web-vitals):
+
+| Metric | Було | Стало | Статус |
+|--------|------|-------|--------|
+| **CLS** | Репорт на кожен batch | Session windows, репорт на visibility change | ✅ |
+| **LCP** | Репорт на кожен entry | Репорт на user input або visibility change | ✅ |
+| **INP** | Репорт на кожен max | Фільтр по interactionId, репорт на visibility change | ✅ |
+| **TTFB** | `responseStart - requestStart` | `responseStart - activationStart` (bfcache aware) | ✅ |
+
+**Ключові зміни**:
+- **CLS**: Session windows (max 5s, gap 1s), репорт max session value
+- **LCP**: Фіналізація на перший user input (click/keydown/pointerdown) або visibility change
+- **INP**: Фільтрація по `interactionId`, ігнорує scroll/mousemove
+- **TTFB**: Підтримка bfcache через `activationStart`
+
+> **Breaking Change**: CLS, LCP, INP тепер репортяться **один раз** на page lifecycle замість спаму подій. Це відповідає Chrome DevTools і Google Search Console.
 
 **📝 README Update**:
 - Додати в `observe()` секцію "Sessions"
-- Додати в `observe()` секцію "Filtering Vitals"
+- ✅ Оновити Web Vitals документацію:
+  - ✅ Пояснити CLS session windows алгоритм
+  - ✅ Додати note про зміну поведінки CLS (репорт на visibility change замість кожного shift)
 - Приклад Session:
 ```typescript
 observe({
@@ -172,21 +192,7 @@ observe({
 // All events now include sessionId
 ```
 
-- Приклад vitalsFilter (CLS noise filtering):
-```typescript
-observe({
-  endpoint: '/api/metrics',
-  vitals: true,
-  vitalsFilter: (vital) => {
-    // Ігнорувати мікро-CLS від CSS анімацій (< 0.01)
-    if (vital.name === 'CLS' && vital.delta < 0.01) return false;
-    return true;
-  },
-});
-```
-
-> **Чому потрібно?** CSS анімації (акордеони, модалки) генерують багато мікро-CLS подій з delta < 0.01.
-> Поріг 0.01 — в 10 разів менше за Google "good" (< 0.1), надійно ловить реальні проблеми верстки.
+> **Note**: `vitalsFilter` callback НЕ потрібен — правильна CLS реалізація вирішує проблему "спаму" на архітектурному рівні.
 
 ---
 
@@ -360,7 +366,7 @@ observe({
 
 > 📋 Детальний план: [.claude/v0.2.0-plan.md](.claude/v0.2.0-plan.md)
 >
-> **Major release**: Повний production-ready observability stack
+> **Major release**: Повний production-ready observability stack + Bundle Restructure
 
 | Функція | Опис |
 |---------|------|
@@ -368,8 +374,9 @@ observe({
 | **Offline Queue** | localStorage queue з FIFO eviction |
 | **User Identification** | `identify()` для аналітики |
 | **Multiple Machine Context** | Всі активні машини в error events |
+| **Bundle Restructure** | Модульні entry points для tree-shaking |
 
-**Bundle**: 4.1 KB (+0.25 KB)
+**Bundle**: core ~2.5 KB, full ~5.5 KB (tree-shakeable)
 
 **📝 README Update** (Major):
 - Додати секцію "### User Identification"
@@ -555,21 +562,30 @@ observe(withAttribution({
 
 ## Bundle Size Targets
 
-| Версія | Core | Transport | SvelteKit | Attribution |
-|--------|------|-----------|-----------|-------------|
-| v0.1.2 | 3.0 KB | — | — | — |
-| v0.1.3 | 3.1 KB | — | — | — |
-| v0.1.4 | 3.1 KB | — | — | — | (hotfix)
-| v0.1.5 | 3.2 KB | — | — | — |
-| v0.1.6 | 3.25 KB | — | — | — |
-| v0.1.7 | 3.4 KB | — | — | — |
-| v0.1.8 | 3.55 KB | — | — | — |
-| v0.1.9 | 3.7 KB | — | — | — |
-| v0.1.10 | 3.85 KB | — | — | — |
-| **v0.2.0** | **4.1 KB** | — | — | — |
-| v0.3.0 | 4.1 KB | — | +1.5 KB | +1.5 KB |
+### До v0.2.0 (single bundle)
 
-> Tree-shaking дозволяє імпортувати тільки потрібне. Реальний bundle залежить від використаних features.
+| Версія | Bundle | Примітка |
+|--------|--------|----------|
+| v0.1.2 | 3.0 KB | — |
+| v0.1.3 ✅ | 3.1 KB | +sampling |
+| v0.1.4 ✅ | 3.5 KB | +Web Vitals fixes |
+| v0.1.5 🚧 | ~3.8 KB | +sessions |
+| v0.1.6-v0.1.10 | ~4.5 KB | +metrics, retry, beacon, privacy |
+
+### v0.2.0+ (modular entry points)
+
+| Entry Point | Size | Опис |
+|-------------|------|------|
+| `svoose` | ~2.5 KB | Core: observe, vitals, errors |
+| `svoose/metrics` | +0.3 KB | metric, counter, gauge, histogram |
+| `svoose/user` | +0.2 KB | identify |
+| `svoose/privacy` | +0.3 KB | configurePII, scrubbing |
+| `svoose/transport` | +0.7 KB | fetch, beacon, hybrid, retry |
+| `svoose/svelte` | +0.3 KB | useMachine |
+| `svoose/sveltekit` | +1.5 KB | hooks, plugin (v0.3.0) |
+| **Full production** | **~5.5 KB** | Все разом |
+
+> **Філософія**: Більшість додатків потребують тільки core (~2.5 KB). Платиш тільки за те що імпортуєш.
 
 ---
 
@@ -775,7 +791,7 @@ identify(null); // logout
 ├── Jan          v0.1.3 ✅ — Sampling (з багом)
 ├── Jan 24       v0.1.4 ✅ — Hotfix: sampling.js (current)
 │
-├── Feb Week 2   v0.1.5 — Session Tracking + Vitals Filter
+├── Feb Week 2   v0.1.5 — Session Tracking + CLS Session Windows
 ├── Feb Week 3   v0.1.6 — Basic Custom Metrics
 ├── Feb Week 4   v0.1.7 — Extended Metrics + Typed API
 │
@@ -806,6 +822,8 @@ identify(null); // logout
 | 2026-01-22 | 5.0 | Weekly releases: v0.1.3→v0.2.0, removed v0.5.0 Advanced FSM |
 | 2026-01-22 | 6.0 | **FSM positioning**: FSM як "lightweight state helper (bonus)", не окремий продукт. XState = complementary tool, не конкурент |
 | 2026-01-24 | 7.0 | **v0.1.4 hotfix**: виправлено missing sampling.js; **vitalsFilter** додано в v0.1.5 для CLS noise filtering |
+| 2026-01-25 | 8.0 | **v0.1.5 CLS fix**: замінено workaround `vitalsFilter` на правильну CLS реалізацію з session windows (web-vitals standard) |
+| 2026-01-25 | 9.0 | **Bundle Restructure**: v0.2.0 включає modular entry points (core ~2.5 KB, full ~5.5 KB). Філософія: платиш тільки за те що імпортуєш |
 
 ---
 
