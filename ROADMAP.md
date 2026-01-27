@@ -357,18 +357,6 @@ export default defineConfig({
 
 ---
 
-### v0.4.0 — Developer Experience
-
-**Status**: Planned
-**Target**: Q3-Q4 2026
-
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **CLI Tool** | `npx svoose check` — config validation | High |
-| **Dashboard Template** | Grafana/simple HTML dashboard | High |
-
----
-
 ### v1.0.0 — Stable Release
 
 **Status**: Planned
@@ -380,6 +368,24 @@ export default defineConfig({
 - [ ] Production use cases documented
 - [ ] Full SvelteKit integration
 - [ ] Community contributions
+
+---
+
+### Post v1.0 — Maintenance Mode
+
+After v1.0.0, svoose enters **maintenance mode**:
+
+| Activity | Priority |
+|----------|----------|
+| Bug fixes | Critical |
+| Security updates | Critical |
+| Svelte/SvelteKit version support | High |
+| Documentation improvements | Medium |
+| Performance optimizations | Medium |
+| Community PRs (selective) | Low |
+| **New features** | ❌ Only if absolutely necessary |
+
+> **Philosophy**: "Better to do less, but do it well." Feature-complete means stable, lightweight, and reliable.
 
 ---
 
@@ -440,12 +446,10 @@ export default defineConfig({
 ├── Mar Week 3   v0.1.10 — Privacy Utilities
 ├── Mar Week 4   v0.2.0 — Production-Ready Observability (major)
 │
-├── May-Jun      v0.3.0 — SvelteKit Integration
-│
-├── Q3-Q4        v0.4.0 — DX (CLI, Dashboard)
+├── May-Jun      v0.3.0 — SvelteKit Integration ⭐ (final feature release)
 │
 2027
-└── Q1-Q2        v1.0.0 — Stable Release
+└── Q1-Q2        v1.0.0 — Stable Release → Maintenance Mode 🛠️
 ```
 
 ---
