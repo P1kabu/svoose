@@ -2,40 +2,15 @@
  * Sampling utilities for rate limiting events by type
  */
 
-// ============================================
-// Types
-// ============================================
+import type { SamplingConfig, SamplingOption } from '../types/index.js';
 
-/**
- * Per-event-type sampling rates
- * Each rate is a number between 0 and 1 (0 = disabled, 1 = all)
- */
-export interface SamplingConfig {
-  /** Sampling rate for Web Vitals events (default: 1) */
-  vitals?: number;
-  /** Sampling rate for error events (default: 1) */
-  errors?: number;
-  /** Sampling rate for custom metric events (default: 1) */
-  custom?: number;
-  /** Sampling rate for state machine transition events (default: 1) */
-  transitions?: number;
-  /** Sampling rate for identify events (default: 1) */
-  identify?: number;
-}
-
-/**
- * Sampling option - either a single rate for all events or per-type config
- */
-export type SamplingOption = number | SamplingConfig;
+// Re-export types from canonical source
+export type { SamplingConfig, SamplingOption };
 
 /**
  * Event types that can be sampled
  */
 export type SamplingEventType = keyof SamplingConfig;
-
-// ============================================
-// Sampler
-// ============================================
 
 /**
  * Sampler interface returned by createSampler

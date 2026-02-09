@@ -2,14 +2,10 @@
  * Session Tracking - automatic sessionId generation with timeout
  */
 
-export interface SessionConfig {
-  /** Session timeout in milliseconds (default: 30 minutes) */
-  timeout: number;
-  /** Storage type for session persistence */
-  storage: 'sessionStorage' | 'localStorage' | 'memory';
-}
+import type { SessionConfig, SessionOption } from '../types/index.js';
 
-export type SessionOption = boolean | Partial<SessionConfig>;
+// Re-export types from canonical source
+export type { SessionConfig, SessionOption };
 
 interface Session {
   id: string;

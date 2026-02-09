@@ -2,7 +2,7 @@
  * Fetch-based transport with sendBeacon fallback
  */
 
-import type { Transport, TransportOptions } from './transport.js';
+import type { Transport, TransportOptions } from '../types/index.js';
 
 /**
  * Create a fetch-based transport

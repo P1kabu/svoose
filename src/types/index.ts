@@ -75,10 +75,22 @@ export interface TransitionEvent {
 }
 
 // ============================================
+// Custom Metric Event
+// ============================================
+
+export interface CustomMetricEvent {
+  type: 'custom';
+  name: string;
+  data: Record<string, unknown>;
+  timestamp: number;
+  sessionId?: string;
+}
+
+// ============================================
 // Union Event Type
 // ============================================
 
-export type ObserveEvent = VitalEvent | ObserveErrorEvent | TransitionEvent;
+export type ObserveEvent = VitalEvent | ObserveErrorEvent | TransitionEvent | CustomMetricEvent;
 
 // ============================================
 // Transport Types

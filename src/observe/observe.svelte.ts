@@ -11,6 +11,7 @@ import {
   type Sampler,
 } from './sampling.js';
 import { createSessionManager, type SessionManager } from './session.js';
+import { setMetricEmitter, getMetricEmitter } from '../metrics/index.js';
 import type { ObserveOptions, VitalEvent, ObserveEvent, Transport } from '../types/index.js';
 
 // Default configuration
@@ -186,7 +187,21 @@ export function observe(options: ObserveOptions = {}): () => void {
 
   // Setup global observer for state machines
   setGlobalObserver(bufferEvent);
-  cleanups.push(() => setGlobalObserver(null));
+  cleanups.push(() => {
+    // Only clear if we're still the active observer
+    if (getGlobalObserver() === bufferEvent) {
+      setGlobalObserver(null);
+    }
+  });
+
+  // Setup metric emitter for custom metrics
+  setMetricEmitter(bufferEvent);
+  cleanups.push(() => {
+    // Only clear if we're still the active emitter
+    if (getMetricEmitter() === bufferEvent) {
+      setMetricEmitter(null);
+    }
+  });
 
   // Setup flush interval
   flushTimer = setInterval(flush, config.flushInterval);

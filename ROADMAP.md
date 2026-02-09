@@ -113,20 +113,19 @@ All Web Vitals fixed according to [web-vitals standard](https://github.com/Googl
 
 ---
 
-### Planned
-
 #### v0.1.6 — Basic Custom Metrics
 
-**Status**: Planned
-**Target**: February 2026, Week 3
+**Released**: February 2026
 
 | Feature | Description |
 |---------|-------------|
 | **metric()** | Basic function for custom events |
 | **Pending buffer** | Buffer events until observe() is called (max 100) |
 | **Dev warnings** | Warning if observe() not called |
+| **Sampling integration** | Respects `sampling.custom` rate |
+| **Session integration** | Includes `sessionId` in events |
 
-**Bundle**: ~3.5 KB (+0.2 KB)
+**Bundle**: 4.5 KB full / 3.5 KB observe-only (measured)
 
 ```typescript
 import { observe, metric } from 'svoose';
@@ -138,6 +137,8 @@ metric('feature_used', { name: 'dark_mode' });
 ```
 
 ---
+
+### Planned
 
 #### v0.1.7 — Extended Metrics + Typed API
 
@@ -151,9 +152,9 @@ metric('feature_used', { name: 'dark_mode' });
 | **histogram()** | Distributions (response_time, payload_size) |
 | **createTypedMetric&lt;T&gt;()** | TypeScript autocomplete for metrics |
 
-**Consistent API**: All functions use `(name, value?, metadata?)` order.
+**Consistent API**: All functions use `(name, value?, metadata?)` order. All use top-level `metricKind` and `value` fields (not nested in `data`).
 
-**Bundle**: ~3.7 KB (+0.2 KB)
+**Bundle**: ~4.7 KB (+0.2 KB)
 
 ```typescript
 import { counter, gauge, histogram, createTypedMetric } from 'svoose';
@@ -187,7 +188,7 @@ track('checkout', { step: 1, total: 99 }); // autocomplete
 | **Payload Chunking** | Auto-split for payloads > 60KB |
 | **Hybrid Transport** | fetch + beacon auto-switch on unload |
 
-**Bundle**: ~3.9 KB (+0.2 KB)
+**Bundle**: ~4.9 KB (+0.2 KB)
 
 ```typescript
 import { createHybridTransport } from 'svoose/transport';
@@ -216,7 +217,7 @@ observe({
 | **Timeout** | AbortController timeout for fetch |
 | **Unload check** | Abort retry on page close |
 
-**Bundle**: ~4.1 KB (+0.2 KB)
+**Bundle**: ~5.1 KB (+0.2 KB)
 
 ```typescript
 import { createFetchTransport } from 'svoose/transport';
@@ -257,7 +258,7 @@ observe({
 | **Privacy Options** | stripQueryParams, stripHash, excludeUserAgent |
 | **configurePII merge** | Multiple calls merge instead of overwrite |
 
-**Bundle**: ~4.3 KB (+0.2 KB)
+**Bundle**: ~5.3 KB (+0.2 KB)
 
 ```typescript
 import { observe, configurePII } from 'svoose';
@@ -277,7 +278,7 @@ observe({
 
 ### v0.2.0 — Production-Ready Observability
 
-**Status**: In Development
+**Status**: Planned
 **Target**: March 2026, Week 4
 
 > **Major release**: Complete production-ready observability stack + Bundle Restructure
@@ -391,6 +392,14 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 ## Bundle Size Targets
 
+### Current (v0.1.6 measured)
+
+| Import | Size (gzip) |
+|--------|-------------|
+| `observe()` + vitals + errors + metrics | 3.5 KB |
+| Full bundle (incl. machine, transport) | 4.5 KB |
+| `createMachine()` only | 0.84 KB |
+
 ### v0.2.0+ (modular entry points)
 
 | Entry Point | Size | Description |
@@ -405,6 +414,7 @@ After v1.0.0, svoose enters **maintenance mode**:
 | **Full production** | **~6 KB** | Everything together |
 
 > **Philosophy**: Most apps only need core (~3.5 KB). Pay only for what you import.
+> **Backward compat**: Main `svoose` entry always re-exports all modules. Subpath imports are optional for bundle optimization.
 
 ---
 
@@ -436,9 +446,9 @@ After v1.0.0, svoose enters **maintenance mode**:
 ├── Jan          v0.1.2 — Foundation
 ├── Jan          v0.1.3 — Sampling (with bug)
 ├── Jan 24       v0.1.4 — Hotfix: sampling.js
-├── Jan 27       v0.1.5 — Session Tracking + Web Vitals Fix (current)
+├── Jan 27       v0.1.5 — Session Tracking + Web Vitals Fix
 │
-├── Feb Week 3   v0.1.6 — Basic Custom Metrics
+├── Feb          v0.1.6 — Basic Custom Metrics (current)
 ├── Feb Week 4   v0.1.7 — Extended Metrics + Typed API
 │
 ├── Mar Week 1   v0.1.8 — Beacon + Hybrid Transport
@@ -474,7 +484,7 @@ After v1.0.0, svoose enters **maintenance mode**:
 | Web Vitals | Yes | Yes |
 | Batching | Yes | Manual |
 | Error tracking | Yes | — |
-| Custom metrics | v0.2 | Manual |
+| Custom metrics | v0.1.6+ | Manual |
 | SvelteKit integration | v0.3 | — |
 
 ### vs Vercel Analytics / PostHog
@@ -520,6 +530,7 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-06 | 11.0 | v0.1.6 released: Basic Custom Metrics (`metric()` API, pending buffer, sampling/session integration). Updated competitor table. |
 | 2026-01-27 | 10.0 | **English rewrite**: Full document translation to English. v0.1.5 released. Updated bundle sizes to realistic targets based on measurements. |
 | 2026-01-25 | 9.0 | Bundle Restructure: v0.2.0 includes modular entry points |
 | 2026-01-25 | 8.0 | v0.1.5 CLS fix: replaced workaround with proper CLS session windows |

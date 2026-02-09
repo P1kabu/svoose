@@ -66,10 +66,16 @@ export type {
 } from './machine/index.js';
 
 // ============================================
+// Custom Metrics
+// ============================================
+export { metric } from './metrics/index.js';
+
+// ============================================
 // Shared Types
 // ============================================
 export type {
   VitalEvent,
   TransitionEvent,
+  CustomMetricEvent,
   ObserveEvent,
 } from './types/index.js';
