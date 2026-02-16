@@ -8,7 +8,7 @@ Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree
 
 - **Web Vitals** — CLS, LCP, FID, INP, FCP, TTFB (no external deps)
 - **Error Tracking** — global errors + unhandled rejections
-- **Custom Metrics** — `metric()` for custom analytics events (v0.1.6+)
+- **Custom Metrics** — `metric()`, `counter()`, `gauge()`, `histogram()` (v0.1.6+)
 - **Session Tracking** — automatic sessionId with timeout (v0.1.5+)
 - **Sampling** — per-event-type rate limiting (v0.1.3+)
 - **State Machines** — minimal FSM with TypeScript inference
@@ -99,7 +99,7 @@ const cleanup = observe({
 cleanup();
 ```
 
-> **Note**: If neither `endpoint` nor `transport` is provided, defaults to `endpoint: '/api/observe'`.
+> **Note**: If neither `endpoint` nor `transport` is provided, defaults to `endpoint: '/api/metrics'`.
 
 #### Sampling (v0.1.3+)
 
@@ -214,6 +214,45 @@ metric('button_clicked', { id: 'submit-btn' });
 metric('feature_used', { name: 'dark_mode', enabled: true });
 ```
 
+##### Metric Helpers (v0.1.7+)
+
+Typed helpers for common metric patterns:
+
+```typescript
+import { counter, gauge, histogram } from 'svoose';
+
+// Counter — increments (default value: 1)
+counter('page_views');
+counter('items_purchased', 3, { category: 'electronics' });
+
+// Gauge — point-in-time values
+gauge('active_users', 42);
+gauge('memory_usage_mb', 256, { heap: 'old' });
+
+// Histogram — distribution values
+histogram('response_time_ms', 123);
+histogram('payload_size', 4096, { route: '/api/data' });
+```
+
+All helpers emit events with top-level `metricKind` and `value` fields for easy backend processing.
+
+##### Typed Metrics (v0.1.7+)
+
+Full TypeScript autocomplete for metric names and data shapes:
+
+```typescript
+import { createTypedMetric } from 'svoose';
+
+const track = createTypedMetric<{
+  checkout_started: { step: number; cartTotal: number };
+  button_clicked: { id: string };
+}>();
+
+track('checkout_started', { step: 1, cartTotal: 99.99 }); // ✅ autocomplete
+track('button_clicked', { id: 'submit' });                 // ✅
+track('unknown_event', {});                                 // ❌ TypeScript error
+```
+
 Events are automatically batched with other metrics. You can control the sampling rate:
 
 ```typescript
@@ -227,7 +266,7 @@ observe({
 });
 ```
 
-**Buffer behavior**: If `metric()` is called before `observe()`, events are buffered (max 100). They're automatically flushed when `observe()` initializes.
+**Buffer behavior**: If `metric()` / `counter()` / `gauge()` / `histogram()` is called before `observe()`, events are buffered (max 100). They're automatically flushed when `observe()` initializes.
 
 ### `createMachine(config)`
 
@@ -249,7 +288,7 @@ const machine = createMachine({
   },
 });
 
-// State & context (reactive in Svelte 5)
+// State & context (use useMachine() from svoose/svelte for reactivity)
 machine.state;              // 'off'
 machine.context;            // { count: 0 }
 
@@ -380,9 +419,9 @@ Tree-shakeable — pay only for what you use:
 
 | Import | Size (gzip) |
 |--------|-------------|
-| `observe()` + vitals + errors + metrics | ~3.5 KB |
+| `observe()` + vitals + errors + metrics | ~3.6 KB |
 | `createMachine()` only | ~0.8 KB |
-| Full bundle (v0.1.x) | ~4.5 KB |
+| Full bundle (v0.1.x) | ~4.7 KB |
 | Full production (v0.2.0+) | ~6 KB |
 
 > Most apps only need `observe()` core (~3.5 KB). Compare: Sentry ~20KB, PostHog ~40KB.
@@ -534,7 +573,7 @@ const machine = createMachine({
 - **v0.1.4** ✅ — Hotfix (missing sampling.js)
 - **v0.1.5** ✅ — Session Tracking + CLS Session Windows fix
 - **v0.1.6** ✅ — Custom metrics (`metric()` API)
-- **v0.1.7** — Extended Metrics (counter/gauge/histogram + typed API)
+- **v0.1.7** ✅ — Extended Metrics (counter/gauge/histogram + typed API)
 - **v0.1.8** — Beacon + Hybrid Transport
 - **v0.1.9** — Retry Logic
 - **v0.1.10** — Privacy Utilities

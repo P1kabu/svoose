@@ -138,12 +138,9 @@ metric('feature_used', { name: 'dark_mode' });
 
 ---
 
-### Planned
-
 #### v0.1.7 — Extended Metrics + Typed API
 
-**Status**: Planned
-**Target**: February 2026, Week 4
+**Released**: February 2026
 
 | Feature | Description |
 |---------|-------------|
@@ -154,7 +151,7 @@ metric('feature_used', { name: 'dark_mode' });
 
 **Consistent API**: All functions use `(name, value?, metadata?)` order. All use top-level `metricKind` and `value` fields (not nested in `data`).
 
-**Bundle**: ~4.7 KB (+0.2 KB)
+**Bundle**: 4.7 KB full / 3.6 KB observe-only (measured)
 
 ```typescript
 import { counter, gauge, histogram, createTypedMetric } from 'svoose';
@@ -174,6 +171,8 @@ track('checkout', { step: 1, total: 99 }); // autocomplete
 ```
 
 ---
+
+### Planned
 
 #### v0.1.8 — Beacon + Hybrid Transport
 
@@ -392,12 +391,12 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 ## Bundle Size Targets
 
-### Current (v0.1.6 measured)
+### Current (v0.1.7 measured)
 
 | Import | Size (gzip) |
 |--------|-------------|
-| `observe()` + vitals + errors + metrics | 3.5 KB |
-| Full bundle (incl. machine, transport) | 4.5 KB |
+| `observe()` + vitals + errors + metrics | 3.6 KB |
+| Full bundle (incl. machine, transport) | 4.7 KB |
 | `createMachine()` only | 0.84 KB |
 
 ### v0.2.0+ (modular entry points)
@@ -448,8 +447,8 @@ After v1.0.0, svoose enters **maintenance mode**:
 ├── Jan 24       v0.1.4 — Hotfix: sampling.js
 ├── Jan 27       v0.1.5 — Session Tracking + Web Vitals Fix
 │
-├── Feb          v0.1.6 — Basic Custom Metrics (current)
-├── Feb Week 4   v0.1.7 — Extended Metrics + Typed API
+├── Feb          v0.1.6 — Basic Custom Metrics
+├── Feb          v0.1.7 — Extended Metrics + Typed API (current)
 │
 ├── Mar Week 1   v0.1.8 — Beacon + Hybrid Transport
 ├── Mar Week 2   v0.1.9 — Retry Logic
@@ -530,6 +529,7 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-16 | 12.0 | v0.1.7 released: Extended Metrics (`counter()`, `gauge()`, `histogram()`, `createTypedMetric<T>()`). Updated bundle sizes. |
 | 2026-02-06 | 11.0 | v0.1.6 released: Basic Custom Metrics (`metric()` API, pending buffer, sampling/session integration). Updated competitor table. |
 | 2026-01-27 | 10.0 | **English rewrite**: Full document translation to English. v0.1.5 released. Updated bundle sizes to realistic targets based on measurements. |
 | 2026-01-25 | 9.0 | Bundle Restructure: v0.2.0 includes modular entry points |

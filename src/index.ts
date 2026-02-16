@@ -68,7 +68,7 @@ export type {
 // ============================================
 // Custom Metrics
 // ============================================
-export { metric } from './metrics/index.js';
+export { metric, counter, gauge, histogram, createTypedMetric } from './metrics/index.js';
 
 // ============================================
 // Shared Types

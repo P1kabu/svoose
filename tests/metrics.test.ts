@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   metric,
+  counter,
+  gauge,
+  histogram,
+  createTypedMetric,
   setMetricEmitter,
   _getPendingEventsCount,
   _clearPendingEvents,
@@ -239,6 +243,158 @@ describe('metric', () => {
       expect(customEvents).toHaveLength(1);
       expect(customEvents[0].sessionId).toBeDefined();
       expect(customEvents[0].sessionId).toMatch(/^\d+-[a-z0-9]+$/);
+    });
+  });
+
+  describe('counter()', () => {
+    it('should emit with default value of 1', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      counter('page_views');
+
+      expect(events).toHaveLength(1);
+      const event = events[0] as CustomMetricEvent;
+      expect(event.type).toBe('custom');
+      expect(event.name).toBe('page_views');
+      expect(event.metricKind).toBe('counter');
+      expect(event.value).toBe(1);
+      expect(event.data).toEqual({});
+    });
+
+    it('should emit with custom value and metadata', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      counter('items_purchased', 3, { category: 'electronics' });
+
+      expect(events).toHaveLength(1);
+      const event = events[0] as CustomMetricEvent;
+      expect(event.metricKind).toBe('counter');
+      expect(event.value).toBe(3);
+      expect(event.data).toEqual({ category: 'electronics' });
+    });
+
+    it('should buffer to pending when no emitter', () => {
+      counter('buffered_counter', 5);
+      expect(_getPendingEventsCount()).toBe(1);
+    });
+  });
+
+  describe('gauge()', () => {
+    it('should emit with correct metricKind and value', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      gauge('active_users', 42);
+
+      expect(events).toHaveLength(1);
+      const event = events[0] as CustomMetricEvent;
+      expect(event.type).toBe('custom');
+      expect(event.name).toBe('active_users');
+      expect(event.metricKind).toBe('gauge');
+      expect(event.value).toBe(42);
+      expect(event.data).toEqual({});
+    });
+
+    it('should include metadata', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      gauge('memory_usage_mb', 256, { heap: 'old' });
+
+      const event = events[0] as CustomMetricEvent;
+      expect(event.data).toEqual({ heap: 'old' });
+    });
+
+    it('should buffer to pending when no emitter', () => {
+      gauge('buffered_gauge', 10);
+      expect(_getPendingEventsCount()).toBe(1);
+    });
+  });
+
+  describe('histogram()', () => {
+    it('should emit with correct metricKind and value', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      histogram('response_time_ms', 123);
+
+      expect(events).toHaveLength(1);
+      const event = events[0] as CustomMetricEvent;
+      expect(event.type).toBe('custom');
+      expect(event.name).toBe('response_time_ms');
+      expect(event.metricKind).toBe('histogram');
+      expect(event.value).toBe(123);
+      expect(event.data).toEqual({});
+    });
+
+    it('should include metadata', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      histogram('payload_size', 4096, { route: '/api/data' });
+
+      const event = events[0] as CustomMetricEvent;
+      expect(event.data).toEqual({ route: '/api/data' });
+    });
+
+    it('should buffer to pending when no emitter', () => {
+      histogram('buffered_histogram', 50);
+      expect(_getPendingEventsCount()).toBe(1);
+    });
+  });
+
+  describe('event format', () => {
+    it('should have metricKind and value at top level, not in data', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      counter('test_counter', 5, { extra: 'info' });
+
+      const event = events[0] as CustomMetricEvent;
+      // Top-level fields
+      expect(event.metricKind).toBe('counter');
+      expect(event.value).toBe(5);
+      // Not duplicated in data
+      expect(event.data).toEqual({ extra: 'info' });
+      expect((event.data as any).metricKind).toBeUndefined();
+      expect((event.data as any).value).toBeUndefined();
+    });
+
+    it('plain metric() should not have metricKind or value', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      metric('plain_event', { foo: 'bar' });
+
+      const event = events[0] as CustomMetricEvent;
+      expect(event.metricKind).toBeUndefined();
+      expect(event.value).toBeUndefined();
+    });
+  });
+
+  describe('createTypedMetric()', () => {
+    it('should create a typed metric function', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      const m = createTypedMetric<{
+        checkout_started: { step: number; cartTotal: number };
+        button_clicked: { id: string };
+      }>();
+
+      m('checkout_started', { step: 1, cartTotal: 99.99 });
+      m('button_clicked', { id: 'submit' });
+
+      expect(events).toHaveLength(2);
+      const e1 = events[0] as CustomMetricEvent;
+      expect(e1.name).toBe('checkout_started');
+      expect(e1.data).toEqual({ step: 1, cartTotal: 99.99 });
+
+      const e2 = events[1] as CustomMetricEvent;
+      expect(e2.name).toBe('button_clicked');
+      expect(e2.data).toEqual({ id: 'submit' });
     });
   });
 
