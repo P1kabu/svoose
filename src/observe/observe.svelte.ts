@@ -16,7 +16,7 @@ import type { ObserveOptions, VitalEvent, ObserveEvent, Transport } from '../typ
 
 // Default configuration
 const defaults = {
-  endpoint: '/api/observe',
+  endpoint: '/api/metrics',
   vitals: true as const,
   errors: true,
   batchSize: 10,

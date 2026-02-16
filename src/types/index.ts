@@ -81,6 +81,8 @@ export interface TransitionEvent {
 export interface CustomMetricEvent {
   type: 'custom';
   name: string;
+  metricKind?: 'counter' | 'gauge' | 'histogram';
+  value?: number;
   data: Record<string, unknown>;
   timestamp: number;
   sessionId?: string;

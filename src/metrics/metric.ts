@@ -72,17 +72,16 @@ function isDev(): boolean {
 }
 
 export function metric(name: string, data: Record<string, unknown> = {}): void {
-  const event: CustomMetricEvent = {
-    type: 'custom',
-    name,
-    data,
-    timestamp: Date.now(),
-  };
+  emitEvent({ type: 'custom', name, data, timestamp: Date.now() });
+}
 
+/**
+ * Internal helper to emit or buffer a CustomMetricEvent
+ */
+function emitEvent(event: CustomMetricEvent): void {
   if (emitter) {
     emitter(event);
   } else {
-    // Buffer event until observe() is initialized
     if (pendingEvents.length >= MAX_PENDING_EVENTS) {
       if (isDev()) {
         console.warn(
@@ -94,6 +93,64 @@ export function metric(name: string, data: Record<string, unknown> = {}): void {
     }
     pendingEvents.push(event);
   }
+}
+
+/**
+ * Internal helper for typed metric helpers (counter, gauge, histogram)
+ */
+function emitMetric(
+  name: string,
+  metricKind: 'counter' | 'gauge' | 'histogram',
+  value: number,
+  metadata: Record<string, unknown> = {},
+): void {
+  emitEvent({ type: 'custom', name, metricKind, value, data: metadata, timestamp: Date.now() });
+}
+
+/**
+ * Increment a counter metric
+ *
+ * @param name - Counter name
+ * @param value - Increment amount (default: 1)
+ * @param metadata - Optional metadata
+ *
+ * @example
+ * counter('page_views');
+ * counter('items_purchased', 3);
+ * counter('api_calls', 1, { endpoint: '/users' });
+ */
+export function counter(name: string, value: number = 1, metadata?: Record<string, unknown>): void {
+  emitMetric(name, 'counter', value, metadata);
+}
+
+/**
+ * Set a gauge metric (point-in-time value)
+ *
+ * @param name - Gauge name
+ * @param value - Current value
+ * @param metadata - Optional metadata
+ *
+ * @example
+ * gauge('active_users', 42);
+ * gauge('memory_usage_mb', 256, { heap: 'old' });
+ */
+export function gauge(name: string, value: number, metadata?: Record<string, unknown>): void {
+  emitMetric(name, 'gauge', value, metadata);
+}
+
+/**
+ * Record a histogram metric (distribution value)
+ *
+ * @param name - Histogram name
+ * @param value - Observed value
+ * @param metadata - Optional metadata
+ *
+ * @example
+ * histogram('response_time_ms', 123);
+ * histogram('payload_size', 4096, { route: '/api/data' });
+ */
+export function histogram(name: string, value: number, metadata?: Record<string, unknown>): void {
+  emitMetric(name, 'histogram', value, metadata);
 }
 
 // ============================================
