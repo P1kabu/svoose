@@ -172,27 +172,28 @@ track('checkout', { step: 1, total: 99 }); // autocomplete
 
 ---
 
-### Planned
-
 #### v0.1.8 — Beacon + Hybrid Transport
 
-**Status**: Planned
-**Target**: March 2026, Week 1
-
-> **Why first?** Beacon solves a critical problem — data loss on page close. More important than retry.
+**Released**: March 2026
 
 | Feature | Description |
 |---------|-------------|
 | **sendBeacon Transport** | Reliable sending on page close |
 | **Payload Chunking** | Auto-split for payloads > 60KB |
 | **Hybrid Transport** | fetch + beacon auto-switch on unload |
+| **INP Memory Leak Fix** | `processedInteractions` Set capped at 1000 |
+| **Fetch Transport Cleanup** | Removed beacon fallback — fetch is now pure fetch |
+| **Transport destroy() on cleanup** | `observe()` cleanup calls `transport.destroy?.()` automatically |
 
-**Bundle**: ~4.9 KB (+0.2 KB)
+**Bundle**: 5.3 KB full / 3.6 KB observe-only (measured)
 
 ```typescript
-import { createHybridTransport } from 'svoose/transport';
+import { createBeaconTransport, createHybridTransport } from 'svoose';
 
-// Recommended for production
+// Beacon only
+const beacon = createBeaconTransport('/api/metrics');
+
+// Hybrid (recommended for production)
 observe({
   transport: createHybridTransport('/api/metrics', {
     default: 'fetch',
@@ -202,6 +203,8 @@ observe({
 ```
 
 ---
+
+### Planned
 
 #### v0.1.9 — Retry Logic
 
@@ -391,12 +394,12 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 ## Bundle Size Targets
 
-### Current (v0.1.7 measured)
+### Current (v0.1.8 measured)
 
 | Import | Size (gzip) |
 |--------|-------------|
 | `observe()` + vitals + errors + metrics | 3.6 KB |
-| Full bundle (incl. machine, transport) | 4.7 KB |
+| Full bundle (incl. machine, transport) | 5.3 KB |
 | `createMachine()` only | 0.84 KB |
 
 ### v0.2.0+ (modular entry points)
@@ -448,9 +451,9 @@ After v1.0.0, svoose enters **maintenance mode**:
 ├── Jan 27       v0.1.5 — Session Tracking + Web Vitals Fix
 │
 ├── Feb          v0.1.6 — Basic Custom Metrics
-├── Feb          v0.1.7 — Extended Metrics + Typed API (current)
+├── Feb          v0.1.7 — Extended Metrics + Typed API
 │
-├── Mar Week 1   v0.1.8 — Beacon + Hybrid Transport
+├── Mar Week 1   v0.1.8 — Beacon + Hybrid Transport (current)
 ├── Mar Week 2   v0.1.9 — Retry Logic
 ├── Mar Week 3   v0.1.10 — Privacy Utilities
 ├── Mar Week 4   v0.2.0 — Production-Ready Observability (major)
@@ -529,6 +532,7 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-03-01 | 13.0 | v0.1.8 released: Beacon + Hybrid Transport (`createBeaconTransport`, `createHybridTransport`), INP memory leak fix. Fetch transport cleaned up (removed beacon fallback). Updated bundle sizes (5.3KB full). |
 | 2026-02-16 | 12.0 | v0.1.7 released: Extended Metrics (`counter()`, `gauge()`, `histogram()`, `createTypedMetric<T>()`). Updated bundle sizes. |
 | 2026-02-06 | 11.0 | v0.1.6 released: Basic Custom Metrics (`metric()` API, pending buffer, sampling/session integration). Updated competitor table. |
 | 2026-01-27 | 10.0 | **English rewrite**: Full document translation to English. v0.1.5 released. Updated bundle sizes to realistic targets based on measurements. |

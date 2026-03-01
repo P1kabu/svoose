@@ -47,8 +47,8 @@ export type { Metric, MetricName, MetricRating } from './observe/index.js';
 // ============================================
 // Transport
 // ============================================
-export { createFetchTransport, createConsoleTransport } from './transport/index.js';
-export type { Transport, TransportOptions } from './transport/index.js';
+export { createFetchTransport, createConsoleTransport, createBeaconTransport, createHybridTransport } from './transport/index.js';
+export type { Transport, TransportOptions, BeaconTransportOptions, HybridTransportOptions, HybridTransport } from './transport/index.js';
 
 // ============================================
 // State Machines

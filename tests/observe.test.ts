@@ -247,6 +247,36 @@ describe('observe', () => {
 
       expect(clearIntervalSpy).toHaveBeenCalled();
     });
+
+    it('should call transport.destroy() on cleanup if available', () => {
+      const destroySpy = vi.fn();
+      const transport = {
+        send: vi.fn(),
+        destroy: destroySpy,
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+      });
+
+      cleanup();
+
+      expect(destroySpy).toHaveBeenCalledOnce();
+    });
+
+    it('should not fail if transport has no destroy()', () => {
+      const transport: Transport = { send: vi.fn() };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+      });
+
+      expect(() => cleanup()).not.toThrow();
+    });
   });
 
   describe('flush interval', () => {

@@ -237,6 +237,8 @@ export function observe(options: ObserveOptions = {}): () => void {
   return () => {
     flush();
     cleanups.forEach((fn) => fn());
+    // Destroy transport if it has a destroy method (e.g. HybridTransport)
+    (transport as Transport & { destroy?: () => void }).destroy?.();
   };
 }
 
