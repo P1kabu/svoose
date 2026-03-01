@@ -83,10 +83,11 @@ describe('createFetchTransport', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('should use sendBeacon when page is hidden', async () => {
+  it('should always use fetch even when page is hidden', async () => {
     Object.defineProperty(document, 'visibilityState', {
       value: 'hidden',
       writable: true,
+      configurable: true,
     });
 
     const transport = createFetchTransport('/api/metrics');
@@ -104,13 +105,14 @@ describe('createFetchTransport', () => {
 
     await transport.send(events);
 
-    expect(mockSendBeacon).toHaveBeenCalled();
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockFetch).toHaveBeenCalled();
+    expect(mockSendBeacon).not.toHaveBeenCalled();
 
     // Reset
     Object.defineProperty(document, 'visibilityState', {
       value: 'visible',
       writable: true,
+      configurable: true,
     });
   });
 

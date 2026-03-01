@@ -291,6 +291,11 @@ export function observeINP(callback: (metric: Metric) => void): () => void {
       // Avoid counting the same interaction multiple times
       // (e.g., pointerdown + pointerup for same click)
       if (processedInteractions.has(eventEntry.interactionId)) continue;
+
+      // Prevent unbounded growth in long-lived SPAs
+      if (processedInteractions.size >= 1000) {
+        processedInteractions.clear();
+      }
       processedInteractions.add(eventEntry.interactionId);
 
       // Track maximum interaction duration

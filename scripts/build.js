@@ -39,6 +39,8 @@ const entryPoints = [
   'src/transport/index.ts',
   'src/transport/transport.ts',
   'src/transport/fetch.ts',
+  'src/transport/beacon.ts',
+  'src/transport/hybrid.ts',
   'src/types/index.ts',
 ];
 
@@ -53,7 +55,7 @@ await esbuild.build({
 console.log('\n📊 Bundle sizes:');
 
 const files = [
-  { name: 'Full bundle', paths: ['dist/index.js', 'dist/observe/index.js', 'dist/observe/observe.svelte.js', 'dist/observe/vitals.js', 'dist/observe/errors.js', 'dist/observe/sampling.js', 'dist/observe/session.js', 'dist/metrics/index.js', 'dist/metrics/metric.js', 'dist/metrics/typed.js', 'dist/machine/index.js', 'dist/machine/machine.svelte.js', 'dist/machine/types.js', 'dist/svelte/index.svelte.js', 'dist/transport/index.js', 'dist/transport/fetch.js', 'dist/transport/transport.js', 'dist/types/index.js'] },
+  { name: 'Full bundle', paths: ['dist/index.js', 'dist/observe/index.js', 'dist/observe/observe.svelte.js', 'dist/observe/vitals.js', 'dist/observe/errors.js', 'dist/observe/sampling.js', 'dist/observe/session.js', 'dist/metrics/index.js', 'dist/metrics/metric.js', 'dist/metrics/typed.js', 'dist/machine/index.js', 'dist/machine/machine.svelte.js', 'dist/machine/types.js', 'dist/svelte/index.svelte.js', 'dist/transport/index.js', 'dist/transport/fetch.js', 'dist/transport/beacon.js', 'dist/transport/hybrid.js', 'dist/transport/transport.js', 'dist/types/index.js'] },
   { name: 'observe() only', paths: ['dist/observe/observe.svelte.js', 'dist/observe/vitals.js', 'dist/observe/errors.js', 'dist/observe/sampling.js', 'dist/observe/session.js', 'dist/metrics/metric.js', 'dist/transport/fetch.js'] },
   { name: 'createMachine() only', paths: ['dist/machine/machine.svelte.js', 'dist/machine/types.js'] },
 ];

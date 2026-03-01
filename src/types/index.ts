@@ -108,6 +108,24 @@ export interface TransportOptions {
   onError?: (error: Error) => void;
 }
 
+export interface BeaconTransportOptions {
+  /** Maximum payload size in bytes before chunking (default: 60KB) */
+  maxPayloadSize?: number;
+  onError?: (error: Error) => void;
+}
+
+export interface HybridTransportOptions extends TransportOptions {
+  /** Default transport mode (default: 'fetch') */
+  default?: 'fetch' | 'beacon';
+  /** Transport mode during page unload (default: 'beacon') */
+  onUnload?: 'fetch' | 'beacon';
+}
+
+export interface HybridTransport extends Transport {
+  /** Remove event listeners and stop the transport */
+  destroy(): void;
+}
+
 // ============================================
 // Session Types
 // ============================================

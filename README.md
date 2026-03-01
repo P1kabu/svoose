@@ -2,13 +2,14 @@
 
 > Svelte + Goose = **svoose** — the goose that sees everything
 
-Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **< 5KB gzipped** (core ~3.5KB).
+Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **~5.3KB gzipped** (core ~3.6KB).
 
 ## Features
 
 - **Web Vitals** — CLS, LCP, FID, INP, FCP, TTFB (no external deps)
 - **Error Tracking** — global errors + unhandled rejections
 - **Custom Metrics** — `metric()`, `counter()`, `gauge()`, `histogram()` (v0.1.6+)
+- **Beacon Transport** — reliable delivery on page close with auto-chunking (v0.1.8+)
 - **Session Tracking** — automatic sessionId with timeout (v0.1.5+)
 - **Sampling** — per-event-type rate limiting (v0.1.3+)
 - **State Machines** — minimal FSM with TypeScript inference
@@ -413,6 +414,34 @@ observe({
 });
 ```
 
+#### Beacon & Hybrid Transport (v0.1.8+)
+
+Prevent data loss on page close with `sendBeacon`:
+
+```typescript
+import { createBeaconTransport, createHybridTransport } from 'svoose';
+
+// Beacon only — guaranteed delivery on page close
+observe({
+  transport: createBeaconTransport('/api/metrics', {
+    maxPayloadSize: 60000, // auto-chunks if exceeded (default: 60KB)
+  }),
+});
+
+// Hybrid (recommended for production)
+// Uses fetch normally, switches to beacon on page close
+const transport = createHybridTransport('/api/metrics', {
+  default: 'fetch',     // normal operation
+  onUnload: 'beacon',   // page close / tab switch
+  headers: { 'Authorization': 'Bearer xxx' },
+});
+
+observe({ transport });
+
+// Cleanup when done (removes lifecycle listeners)
+transport.destroy();
+```
+
 ## Bundle Size
 
 Tree-shakeable — pay only for what you use:
@@ -421,10 +450,10 @@ Tree-shakeable — pay only for what you use:
 |--------|-------------|
 | `observe()` + vitals + errors + metrics | ~3.6 KB |
 | `createMachine()` only | ~0.8 KB |
-| Full bundle (v0.1.x) | ~4.7 KB |
+| Full bundle (v0.1.x) | ~5.3 KB |
 | Full production (v0.2.0+) | ~6 KB |
 
-> Most apps only need `observe()` core (~3.5 KB). Compare: Sentry ~20KB, PostHog ~40KB.
+> Most apps only need `observe()` core (~3.6 KB). Compare: Sentry ~20KB, PostHog ~40KB.
 
 ## TypeScript
 
@@ -574,7 +603,7 @@ const machine = createMachine({
 - **v0.1.5** ✅ — Session Tracking + CLS Session Windows fix
 - **v0.1.6** ✅ — Custom metrics (`metric()` API)
 - **v0.1.7** ✅ — Extended Metrics (counter/gauge/histogram + typed API)
-- **v0.1.8** — Beacon + Hybrid Transport
+- **v0.1.8** ✅ — Beacon + Hybrid Transport
 - **v0.1.9** — Retry Logic
 - **v0.1.10** — Privacy Utilities
 - **v0.2.0** — Production-Ready Observability + Bundle Restructure (modular entry points)

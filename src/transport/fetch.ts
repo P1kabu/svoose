@@ -1,12 +1,12 @@
 /**
- * Fetch-based transport with sendBeacon fallback
+ * Fetch-based transport
  */
 
 import type { Transport, TransportOptions } from '../types/index.js';
 
 /**
  * Create a fetch-based transport
- * Uses sendBeacon for page unload, fetch otherwise
+ * Always uses fetch with keepalive: true
  *
  * @param endpoint - URL to send events to
  * @param options - Transport options (headers, error callback)
@@ -20,33 +20,13 @@ export function createFetchTransport(
       if (events.length === 0) return;
 
       try {
-        const payload = JSON.stringify(events);
-
-        // Use sendBeacon when page is hidden (e.g., user navigating away)
-        // sendBeacon is more reliable for unload scenarios
-        if (
-          typeof document !== 'undefined' &&
-          document.visibilityState === 'hidden' &&
-          typeof navigator !== 'undefined' &&
-          navigator.sendBeacon
-        ) {
-          const blob = new Blob([payload], { type: 'application/json' });
-          const success = navigator.sendBeacon(endpoint, blob);
-          if (!success) {
-            throw new Error('sendBeacon failed');
-          }
-          return;
-        }
-
-        // Use fetch for normal operation
         await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...options.headers,
           },
-          body: payload,
-          // keepalive ensures request completes even if page is closed
+          body: JSON.stringify(events),
           keepalive: true,
         });
       } catch (error) {
