@@ -41,7 +41,7 @@ export function createFetchTransport(
  */
 export function createConsoleTransport(options: { pretty?: boolean } = {}): Transport {
   return {
-    async send(events) {
+    send(events) {
       for (const event of events) {
         if (options.pretty) {
           console.log('[svoose]', JSON.stringify(event, null, 2));

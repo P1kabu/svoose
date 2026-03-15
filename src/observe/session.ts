@@ -53,7 +53,7 @@ function generateId(): string {
  *   storage: 'localStorage',
  * });
  */
-export function createSessionManager(config: SessionOption): SessionManager | null {
+export function createSessionManager(config: SessionOption, debug: boolean = false): SessionManager | null {
   // Disabled
   if (config === false) return null;
 
@@ -82,6 +82,9 @@ export function createSessionManager(config: SessionOption): SessionManager | nu
       storage.removeItem(testKey);
       return storage;
     } catch {
+      if (debug && typeof console !== 'undefined') {
+        console.warn('[svoose] Storage unavailable, falling back to in-memory sessions. SessionId will not persist across page reloads.');
+      }
       return null;
     }
   }

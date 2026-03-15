@@ -24,8 +24,8 @@ export interface ReactiveMachine<
   matches(state: TState): boolean;
   /** Check if machine is in any of given states */
   matchesAny(...states: TState[]): boolean;
-  /** Check if event can be sent */
-  can(eventType: TEvent['type']): boolean;
+  /** Check if event can be sent. Accepts string or full event object for payload-dependent guards. */
+  can(event: TEvent['type'] | TEvent): boolean;
   /** Send event to machine */
   send(event: TEvent | TEvent['type']): void;
   /** Cleanup machine */
@@ -95,8 +95,8 @@ export function useMachine<
     matchesAny(...states: TState[]): boolean {
       return states.includes(reactiveState);
     },
-    can(eventType: TEvent['type']): boolean {
-      return machine.can(eventType);
+    can(event: TEvent['type'] | TEvent): boolean {
+      return machine.can(event);
     },
     send: reactiveSend,
     destroy: machine.destroy.bind(machine),

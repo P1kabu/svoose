@@ -153,6 +153,41 @@ describe('createMachine', () => {
 
       machine.destroy();
     });
+
+    it('should accept full event object for payload-dependent guards', () => {
+      type Events =
+        | { type: 'LOGIN'; email: string }
+        | { type: 'LOGOUT' };
+
+      const machine = createMachine<object, 'idle' | 'authenticated', Events>({
+        id: 'auth',
+        initial: 'idle',
+        states: {
+          idle: {
+            on: {
+              LOGIN: {
+                target: 'authenticated',
+                guard: (_ctx, evt) => evt.email.includes('@'),
+              },
+            },
+          },
+          authenticated: {
+            on: { LOGOUT: 'idle' },
+          },
+        },
+      });
+
+      // String-only: guard gets { type: 'LOGIN' }, email is undefined — should return false (caught)
+      expect(machine.can('LOGIN')).toBe(false);
+
+      // Full event with valid payload
+      expect(machine.can({ type: 'LOGIN', email: 'user@example.com' })).toBe(true);
+
+      // Full event with invalid payload
+      expect(machine.can({ type: 'LOGIN', email: 'invalid' })).toBe(false);
+
+      machine.destroy();
+    });
   });
 
   describe('context', () => {

@@ -68,14 +68,12 @@ export function createSampler(config: SamplingOption): Sampler {
           errors: normalizeRate(config),
           custom: normalizeRate(config),
           transitions: normalizeRate(config),
-          identify: 1, // Always send identify events by default
         }
       : {
           vitals: normalizeRate(config.vitals ?? 1),
           errors: normalizeRate(config.errors ?? 1),
           custom: normalizeRate(config.custom ?? 1),
           transitions: normalizeRate(config.transitions ?? 1),
-          identify: normalizeRate(config.identify ?? 1),
         };
 
   return {
@@ -112,8 +110,6 @@ export function eventTypeToSamplingType(
       return 'custom';
     case 'transition':
       return 'transitions';
-    case 'identify':
-      return 'identify';
     default:
       return null;
   }

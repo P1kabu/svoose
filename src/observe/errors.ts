@@ -24,19 +24,36 @@ export function unregisterMachineContext(id: string): void {
   machineContexts.delete(id);
 }
 
+const MAX_MACHINES_IN_ERROR = 10;
+
 /**
  * Get current machine context for error reports
- * Returns first active machine (could be enhanced for multiple)
+ * Returns all active machines (max 10) + backward compat fields from first
  */
-function getMachineContext(): { machineId?: string; machineState?: string } {
+function getMachineContext(): {
+  machineId?: string;
+  machineState?: string;
+  machines?: Array<{ id: string; state: string }>;
+} {
+  if (machineContexts.size === 0) return {};
+
+  const machines: Array<{ id: string; state: string }> = [];
   for (const [id, ctx] of machineContexts) {
+    if (machines.length >= MAX_MACHINES_IN_ERROR) break;
     try {
-      return { machineId: id, machineState: ctx.getState() };
+      machines.push({ id, state: ctx.getState() });
     } catch {
       // Machine might be in invalid state, skip it
     }
   }
-  return {};
+
+  if (machines.length === 0) return {};
+
+  return {
+    machineId: machines[0].id,
+    machineState: machines[0].state,
+    machines,
+  };
 }
 
 /**

@@ -34,20 +34,6 @@ export function setMetricEmitter(emit: ((event: ObserveEvent) => void) | null): 
 }
 
 /**
- * Send a custom metric event
- *
- * Events are automatically batched with other metrics and sent to your backend.
- * If called before observe() is initialized, events are buffered (max 100).
- *
- * @param name - Metric name (e.g., 'checkout_started', 'button_clicked')
- * @param data - Optional data payload
- *
- * @example
- * metric('checkout_started', { step: 1, cartTotal: 99.99 });
- * metric('button_clicked', { id: 'submit-btn' });
- * metric('feature_used', { name: 'dark_mode', enabled: true });
- */
-/**
  * Get the current metric emitter function (for internal use)
  * @internal
  */
@@ -71,8 +57,8 @@ function isDev(): boolean {
   }
 }
 
-export function metric(name: string, data: Record<string, unknown> = {}): void {
-  emitEvent({ type: 'custom', name, data, timestamp: Date.now() });
+export function metric(name: string, metadata: Record<string, unknown> = {}): void {
+  emitEvent({ type: 'custom', name, metadata, timestamp: Date.now() });
 }
 
 /**
@@ -104,7 +90,7 @@ function emitMetric(
   value: number,
   metadata: Record<string, unknown> = {},
 ): void {
-  emitEvent({ type: 'custom', name, metricKind, value, data: metadata, timestamp: Date.now() });
+  emitEvent({ type: 'custom', name, metricKind, value, metadata, timestamp: Date.now() });
 }
 
 /**

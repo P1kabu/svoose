@@ -2,7 +2,7 @@
 
 > Svelte + Goose = **svoose** — the goose that sees everything
 
-Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **~5.3KB gzipped** (core ~3.6KB).
+Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **~5.5KB gzipped** (core ~3.8KB).
 
 ## Features
 
@@ -92,6 +92,9 @@ const cleanup = observe({
   // Sessions (v0.1.5+)
   session: true,             // or { timeout: 30 * 60 * 1000, storage: 'sessionStorage' }
 
+  // Error callback (v0.1.9+) — handle transport failures
+  onError: (err) => console.error('Transport failed:', err),
+
   // Debug
   debug: false,
 });
@@ -124,8 +127,6 @@ observe({
   },
 });
 ```
-
-> **Note**: `sampleRate` is deprecated. Use `sampling` instead.
 
 #### Sessions (v0.1.5+)
 
@@ -209,7 +210,7 @@ Track custom events for analytics:
 ```typescript
 import { metric } from 'svoose';
 
-// Basic usage
+// Basic usage — metric(name, metadata?)
 metric('checkout_started', { step: 1, cartTotal: 99.99 });
 metric('button_clicked', { id: 'submit-btn' });
 metric('feature_used', { name: 'dark_mode', enabled: true });
@@ -235,11 +236,11 @@ histogram('response_time_ms', 123);
 histogram('payload_size', 4096, { route: '/api/data' });
 ```
 
-All helpers emit events with top-level `metricKind` and `value` fields for easy backend processing.
+All helpers emit `CustomMetricEvent` with top-level `metricKind`, `value`, and optional `metadata` fields for easy backend processing.
 
 ##### Typed Metrics (v0.1.7+)
 
-Full TypeScript autocomplete for metric names and data shapes:
+Full TypeScript autocomplete for metric names and metadata shapes:
 
 ```typescript
 import { createTypedMetric } from 'svoose';
@@ -299,6 +300,7 @@ machine.matchesAny('on', 'off'); // true
 
 // Check if event is valid
 machine.can('TOGGLE');      // true
+machine.can({ type: 'SET', value: 42 }); // full event for payload-dependent guards
 
 // Send events
 machine.send('TOGGLE');
@@ -375,8 +377,8 @@ const auth = createMachine({
   },
 });
 
-// When an error occurs, it includes:
-// { machineId: 'auth', machineState: 'loading', ... }
+// When an error occurs, it includes all active machines:
+// { machineId: 'auth', machineState: 'loading', machines: [{ id: 'auth', state: 'loading' }], ... }
 ```
 
 ### Custom Transport
@@ -448,12 +450,12 @@ Tree-shakeable — pay only for what you use:
 
 | Import | Size (gzip) |
 |--------|-------------|
-| `observe()` + vitals + errors + metrics | ~3.6 KB |
-| `createMachine()` only | ~0.8 KB |
-| Full bundle (v0.1.x) | ~5.3 KB |
+| `observe()` + vitals + errors + metrics | ~3.8 KB |
+| `createMachine()` only | ~0.85 KB |
+| Full bundle (v0.1.x) | ~5.5 KB |
 | Full production (v0.2.0+) | ~6 KB |
 
-> Most apps only need `observe()` core (~3.6 KB). Compare: Sentry ~20KB, PostHog ~40KB.
+> Most apps only need `observe()` core (~3.8 KB). Compare: Sentry ~20KB, PostHog ~40KB.
 
 ## TypeScript
 
@@ -604,10 +606,15 @@ const machine = createMachine({
 - **v0.1.6** ✅ — Custom metrics (`metric()` API)
 - **v0.1.7** ✅ — Extended Metrics (counter/gauge/histogram + typed API)
 - **v0.1.8** ✅ — Beacon + Hybrid Transport
-- **v0.1.9** — Retry Logic
-- **v0.1.10** — Privacy Utilities
-- **v0.2.0** — Production-Ready Observability + Bundle Restructure (modular entry points)
-- **v0.3.0** — SvelteKit Integration (Vite plugin, hooks, route tracking)
+- **v0.1.9** ✅ — API Cleanup: `data`→`metadata`, `can()` accepts full events, `onError` callback, multi-machine error context, validation
+- **v0.1.10** — Retry Logic
+- **v0.1.11** — Privacy Utilities
+- **v0.2.0** — Production-Ready Observability (User ID, Offline, flush API, Rate Limiter)
+- **v0.2.1** — Breadcrumbs
+- **v0.2.2** — Navigation Events + Soft Navigation
+- **v0.2.3** — Request Correlation
+- **v0.3.0** — SvelteKit Core Integration
+- **v0.3.1** — SvelteKit Vite Plugin
 - **v1.0.0** — Stable Release (Q1 2027)
 
 > **Note**: FSM is a lightweight bonus feature, not an XState competitor. For complex state machines, use XState.

@@ -204,12 +204,34 @@ observe({
 
 ---
 
+#### v0.1.9 — API Cleanup (Breaking Changes)
+
+**Released**: March 2026
+
+| Feature | Description |
+|---------|-------------|
+| **Remove `sampleRate`** | Removed deprecated `sampleRate`, use `sampling` instead |
+| **Remove `identify` from sampling** | Removed premature `identify` from `SamplingConfig` (returns in v0.2.0) |
+| **`data` → `metadata`** | Renamed `CustomMetricEvent.data` to `metadata` (optional) |
+| **`createConsoleTransport` sync** | Removed unnecessary `async` from console transport |
+| **`can()` full event support** | `can()` now accepts full event objects for payload-dependent guards |
+| **Multi-machine error context** | Error events include all active machines (max 10) |
+| **Options validation** | `observe()` validates `batchSize`, `flushInterval`, `sampling` |
+| **`onError` callback** | Transport error callback in `ObserveOptions` |
+| **Transport error handling** | Catches both sync and async transport errors |
+| **Session storage warning** | Debug warning when storage unavailable (fallback to memory) |
+| **Internal test helpers** | `_getPendingEventsCount`, `_clearPendingEvents` removed from public exports |
+
+**Bundle**: 5.5 KB full / 3.8 KB observe-only (measured)
+
+---
+
 ### Planned
 
-#### v0.1.9 — Retry Logic
+#### v0.1.10 — Retry Logic
 
 **Status**: Planned
-**Target**: March 2026, Week 2
+**Target**: March 2026, Week 2-3
 
 | Feature | Description |
 |---------|-------------|
@@ -219,7 +241,7 @@ observe({
 | **Timeout** | AbortController timeout for fetch |
 | **Unload check** | Abort retry on page close |
 
-**Bundle**: ~5.1 KB (+0.2 KB)
+**Bundle**: ~5.7 KB (+0.2 KB)
 
 ```typescript
 import { createFetchTransport } from 'svoose/transport';
@@ -247,7 +269,7 @@ observe({
 
 ---
 
-#### v0.1.10 — Privacy Utilities
+#### v0.1.11 — Privacy Utilities
 
 **Status**: Planned
 **Target**: March 2026, Week 3
@@ -257,10 +279,10 @@ observe({
 | **URL Scrubbing** | Remove tokens from URLs (strings + regex) |
 | **Field Masking** | Mask PII (show last 4 characters) |
 | **Custom Sanitizer** | Custom event sanitization callback |
-| **Privacy Options** | stripQueryParams, stripHash, excludeUserAgent |
-| **configurePII merge** | Multiple calls merge instead of overwrite |
+| **Privacy Options** | stripQueryParams, stripHash |
+| **configurePII overwrite** | Each call replaces previous config (not merge) |
 
-**Bundle**: ~5.3 KB (+0.2 KB)
+**Bundle**: ~5.9 KB (+0.2 KB)
 
 ```typescript
 import { observe, configurePII } from 'svoose';
@@ -288,10 +310,12 @@ observe({
 | Feature | Description |
 |---------|-------------|
 | **Network Detection** | Pause/resume on offline/online |
-| **Offline Queue** | localStorage queue with FIFO eviction |
+| **Offline Queue** | In-memory queue with FIFO eviction (localStorage deferred to v0.2.1) |
 | **User Identification** | `identify()` for analytics |
-| **Multiple Machine Context** | All active machines in error events (max 10) |
 | **Bundle Restructure** | Modular entry points for tree-shaking |
+| **flush() API** | Public flush without destroying observer |
+| **Rate Limiter** | `maxEventsPerSecond` circuit breaker |
+| **NavigationEvent type** | Type stub for future SvelteKit route tracking |
 
 **Bundle**: core ~3.5 KB, full ~6 KB (tree-shakeable)
 
@@ -299,14 +323,14 @@ observe({
 import { observe, identify } from 'svoose';
 import { createHybridTransport } from 'svoose/transport';
 
-observe({
+const obs = observe({
   endpoint: '/api/metrics',
   vitals: true,
   errors: true,
   sampling: { vitals: 0.1, errors: 1.0 },
   session: { timeout: 30 * 60 * 1000 },
-  networkAware: true,
-  offlineStorage: 'localStorage',
+  offline: { maxEvents: 1000 },
+  maxEventsPerSecond: 100,
   transport: createHybridTransport('/api/metrics', {
     default: 'fetch',
     onUnload: 'beacon',
@@ -321,25 +345,108 @@ identify(null); // logout (emits event with previousUserId)
 
 ---
 
+#### v0.2.1 — Breadcrumbs
+
+**Status**: Planned
+**Target**: April 2026
+
+| Feature | Description |
+|---------|-------------|
+| **Breadcrumb Buffer** | Ring buffer of last 20 user actions |
+| **Auto Breadcrumbs** | From transitions, metrics, navigation |
+| **Error Enrichment** | Breadcrumbs attached to error events |
+
+**Bundle**: +0.3 KB
+
+---
+
+#### v0.2.2 — Navigation Events + Soft Navigation
+
+**Status**: Planned
+**Target**: May 2026
+
+| Feature | Description |
+|---------|-------------|
+| **NavigationEvent emission** | Auto-emit on History/popstate changes |
+| **Navigation timing** | Duration measurement for SPA transitions |
+| **Soft Navigation API** | PerformanceObserver soft-nav integration |
+
+**Bundle**: +0.2 KB
+
+---
+
+#### v0.2.3 — Request Correlation
+
+**Status**: Planned
+**Target**: May 2026
+
+| Feature | Description |
+|---------|-------------|
+| **traceId generation** | Unique ID per page load / navigation |
+| **Trace header injection** | Auto-inject in transport requests |
+| **Server-Timing parsing** | Extract backend timing from response headers |
+
+**Bundle**: +0.2 KB
+
+> Foundation for SvelteKit server integration in v0.3.0
+
+---
+
 ### v0.3.0 — SvelteKit Integration
 
 **Status**: Planned
 **Priority**: **CRITICAL** — key competitive advantage
-**Target**: May-June 2026 (8 weeks)
+**Target**: June-July 2026
 
 > **Why priority?** SvelteKit is where 80% of Svelte developers are. Zero-config integration = adoption.
+> **Prerequisites**: v0.2.2 (Navigation Events), v0.2.3 (Request Correlation)
 
 | Feature | Description | Priority |
 |---------|-------------|----------|
-| `svoose/sveltekit` entry | Server/client hooks | Critical |
-| **Vite Plugin** | Auto-instrumentation for load() | Critical |
-| Route Tracking | Automatic page view tracking | Critical |
-| SSR Safety | Graceful server-side handling | Critical |
-| **Soft Navigation** | SPA navigation metrics | High |
-| **Attribution API** | LCP element, CLS source identification | Medium |
+| `svoose/sveltekit` entry | Client + server hooks | Critical |
+| **Client auto-init** | Auto-call observe() with config | Critical |
+| **Route tracking** | Automatic NavigationEvent on route change | Critical |
+| **Server handleError()** | Error tracking in server hooks | Critical |
+| **Server handle()** | Request timing + traceId propagation | High |
+| **SSR Safety** | Graceful server-side noop | Critical |
+
+**Bundle**: +1.0 KB for sveltekit entry
 
 ```typescript
-// vite.config.ts — Zero-config auto-instrumentation
+// hooks.client.ts
+import { initSvoose } from 'svoose/sveltekit';
+
+initSvoose({
+  endpoint: '/api/metrics',
+  vitals: true,
+  errors: true,
+  session: true,
+});
+```
+
+```typescript
+// hooks.server.ts
+import { handleErrorWithSvoose, handleWithSvoose } from 'svoose/sveltekit';
+
+export const handleError = handleErrorWithSvoose({ endpoint: '/api/metrics' });
+export const handle = handleWithSvoose(); // request timing + traceId
+```
+
+---
+
+#### v0.3.1 — SvelteKit Vite Plugin
+
+**Status**: Planned
+**Target**: July 2026
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| **Vite Plugin** | Auto-instrumentation for load() functions | High |
+| **Attribution API** | LCP element, CLS source identification | Medium |
+| **Dev overlay** | Optional dev-mode metrics overlay | Low |
+
+```typescript
+// vite.config.ts
 import { svoosePlugin } from 'svoose/vite';
 
 export default defineConfig({
@@ -347,16 +454,12 @@ export default defineConfig({
     sveltekit(),
     svoosePlugin({
       autoInstrumentLoad: true,
-      autoInit: {
-        endpoint: '/api/metrics',
-        vitals: true,
-      },
     }),
   ],
 });
 ```
 
-**Bundle**: +1.5 KB for sveltekit entry
+**Bundle**: +1.5 KB for vite plugin
 
 ---
 
@@ -394,13 +497,13 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 ## Bundle Size Targets
 
-### Current (v0.1.8 measured)
+### Current (v0.1.9 measured)
 
 | Import | Size (gzip) |
 |--------|-------------|
-| `observe()` + vitals + errors + metrics | 3.6 KB |
-| Full bundle (incl. machine, transport) | 5.3 KB |
-| `createMachine()` only | 0.84 KB |
+| `observe()` + vitals + errors + metrics | 3.8 KB |
+| Full bundle (incl. machine, transport) | 5.5 KB |
+| `createMachine()` only | 0.85 KB |
 
 ### v0.2.0+ (modular entry points)
 
@@ -453,12 +556,18 @@ After v1.0.0, svoose enters **maintenance mode**:
 ├── Feb          v0.1.6 — Basic Custom Metrics
 ├── Feb          v0.1.7 — Extended Metrics + Typed API
 │
-├── Mar Week 1   v0.1.8 — Beacon + Hybrid Transport (current)
-├── Mar Week 2   v0.1.9 — Retry Logic
-├── Mar Week 3   v0.1.10 — Privacy Utilities
+├── Mar Week 1   v0.1.8 — Beacon + Hybrid Transport
+├── Mar Week 2   v0.1.9 — API Cleanup (Breaking) ← current
+├── Mar Week 2-3 v0.1.10 — Retry Logic
+├── Mar Week 3   v0.1.11 — Privacy Utilities
 ├── Mar Week 4   v0.2.0 — Production-Ready Observability (major)
 │
-├── May-Jun      v0.3.0 — SvelteKit Integration ⭐ (final feature release)
+├── Apr          v0.2.1 — Breadcrumbs
+├── May          v0.2.2 — Navigation Events + Soft Navigation
+├── May          v0.2.3 — Request Correlation
+│
+├── Jun-Jul      v0.3.0 — SvelteKit Core Integration ⭐
+├── Jul          v0.3.1 — SvelteKit Vite Plugin
 │
 2027
 └── Q1-Q2        v1.0.0 — Stable Release → Maintenance Mode 🛠️
@@ -532,6 +641,8 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-03-15 | 15.0 | Plan sync: Fixed v0.1.11 (overwrite not merge, removed excludeUserAgent), v0.2.0 (offline=in-memory, added flush/rate-limiter/NavigationEvent, removed already-done multi-machine). Added v0.2.1-v0.2.3 roadmap (breadcrumbs, navigation, correlation). Expanded v0.3.0/v0.3.1 SvelteKit plan. |
+| 2026-03-09 | 14.0 | v0.1.9 released: API Cleanup (Breaking). Removed `sampleRate`, `identify` from sampling, `data`→`metadata`, sync console transport, `can()` full event, multi-machine error context, options validation, transport error handling, session storage warning. 206 tests, 5.5KB full. |
 | 2026-03-01 | 13.0 | v0.1.8 released: Beacon + Hybrid Transport (`createBeaconTransport`, `createHybridTransport`), INP memory leak fix. Fetch transport cleaned up (removed beacon fallback). Updated bundle sizes (5.3KB full). |
 | 2026-02-16 | 12.0 | v0.1.7 released: Extended Metrics (`counter()`, `gauge()`, `histogram()`, `createTypedMetric<T>()`). Updated bundle sizes. |
 | 2026-02-06 | 11.0 | v0.1.6 released: Basic Custom Metrics (`metric()` API, pending buffer, sampling/session integration). Updated competitor table. |

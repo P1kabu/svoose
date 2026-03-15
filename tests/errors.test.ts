@@ -117,6 +117,8 @@ describe('machine context integration', () => {
     cleanup?.();
     cleanup = null;
     unregisterMachineContext('test-machine');
+    unregisterMachineContext('machine-2');
+    unregisterMachineContext('machine-3');
   });
 
   it('should include machine context in error events', () => {
@@ -135,8 +137,35 @@ describe('machine context integration', () => {
         type: 'error',
         machineId: 'test-machine',
         machineState: 'loading',
+        machines: [{ id: 'test-machine', state: 'loading' }],
       })
     );
+  });
+
+  it('should include all active machines in error events', () => {
+    const callback = vi.fn();
+    cleanup = observeErrors(callback);
+
+    registerMachineContext('test-machine', () => 'idle');
+    registerMachineContext('machine-2', () => 'loading');
+    registerMachineContext('machine-3', () => 'error');
+
+    window.dispatchEvent(
+      new ErrorEvent('error', { message: 'Error with multiple machines' })
+    );
+
+    const event = callback.mock.calls[0][0] as any;
+    expect(event.machines).toHaveLength(3);
+    expect(event.machines).toEqual(
+      expect.arrayContaining([
+        { id: 'test-machine', state: 'idle' },
+        { id: 'machine-2', state: 'loading' },
+        { id: 'machine-3', state: 'error' },
+      ])
+    );
+    // Backward compat — first machine
+    expect(event.machineId).toBe('test-machine');
+    expect(event.machineState).toBe('idle');
   });
 
   it('should not include machine context when no machine registered', () => {

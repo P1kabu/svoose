@@ -21,9 +21,23 @@ const defaults = {
   errors: true,
   batchSize: 10,
   flushInterval: 5000,
-  sampleRate: 1,
   debug: false,
-} satisfies Required<Omit<ObserveOptions, 'transport' | 'filter' | 'sampling' | 'session'>>;
+} satisfies Required<Omit<ObserveOptions, 'transport' | 'filter' | 'sampling' | 'session' | 'onError'>>;
+
+/**
+ * Validate observe options at startup
+ */
+function validateOptions(options: ObserveOptions): void {
+  if (options.batchSize !== undefined && (options.batchSize < 1 || !Number.isFinite(options.batchSize))) {
+    throw new Error(`[svoose] batchSize must be >= 1, got ${options.batchSize}`);
+  }
+  if (options.flushInterval !== undefined && (options.flushInterval < 100 || !Number.isFinite(options.flushInterval))) {
+    throw new Error(`[svoose] flushInterval must be >= 100ms, got ${options.flushInterval}`);
+  }
+  if (typeof options.sampling === 'number' && (options.sampling < 0 || options.sampling > 1)) {
+    throw new Error(`[svoose] sampling rate must be between 0 and 1, got ${options.sampling}`);
+  }
+}
 
 // Global observer callback for state machines
 let globalObserverCallback: ((event: ObserveEvent) => void) | null = null;
@@ -64,10 +78,7 @@ export function getGlobalObserver(): typeof globalObserverCallback {
  * });
  */
 export function observe(options: ObserveOptions = {}): () => void {
-  // Legacy sampleRate support (deprecated) - skip entire observer
-  if (Math.random() > (options.sampleRate ?? defaults.sampleRate)) {
-    return () => {};
-  }
+  validateOptions(options);
 
   const config = { ...defaults, ...options };
   const transport: Transport = config.transport ?? createFetchTransport(config.endpoint);
@@ -79,7 +90,7 @@ export function observe(options: ObserveOptions = {}): () => void {
 
   // Create session manager if session option is provided
   const sessionManager: SessionManager | null = config.session != null
-    ? createSessionManager(config.session)
+    ? createSessionManager(config.session, config.debug)
     : null;
 
   const cleanups: (() => void)[] = [];
@@ -131,19 +142,30 @@ export function observe(options: ObserveOptions = {}): () => void {
     }
   };
 
+  // Handle transport errors consistently
+  const handleError = (err: unknown): void => {
+    const error = err instanceof Error ? err : new Error(String(err));
+    if (config.onError) {
+      config.onError(error);
+    }
+    if (config.debug) {
+      console.error('[svoose] transport error:', error);
+    }
+  };
+
   // Send buffered events to transport
   const flush = (): void => {
     if (buffer.length === 0) return;
 
     const events = buffer.splice(0, buffer.length);
-    // Handle both Promise and non-Promise returns from transport.send()
-    const result = transport.send(events);
-    if (result && typeof result.catch === 'function') {
-      result.catch((err) => {
-        if (config.debug) {
-          console.error('[svoose] transport error:', err);
-        }
-      });
+    try {
+      // Handle both Promise and non-Promise returns from transport.send()
+      const result = transport.send(events);
+      if (result && typeof result.catch === 'function') {
+        result.catch(handleError);
+      }
+    } catch (err) {
+      handleError(err);
     }
   };
 

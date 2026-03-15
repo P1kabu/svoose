@@ -117,38 +117,28 @@ describe('observe', () => {
   });
 
   describe('sampling', () => {
-    it('should skip observation when sample rate excludes', () => {
-      vi.spyOn(Math, 'random').mockReturnValue(0.9);
-
-      const sendSpy = vi.fn();
-      const transport: Transport = { send: sendSpy };
-
-      const cleanup = observe({
-        transport,
-        sampleRate: 0.5, // 50% sample rate, random = 0.9 > 0.5
+    it('should validate batchSize', () => {
+      expect(() => observe({
+        batchSize: -5,
         vitals: false,
         errors: false,
-      });
-
-      cleanup();
-      expect(sendSpy).not.toHaveBeenCalled();
+      })).toThrow('[svoose] batchSize must be >= 1');
     });
 
-    it('should include observation when within sample rate', () => {
-      vi.spyOn(Math, 'random').mockReturnValue(0.3);
-
-      const sendSpy = vi.fn();
-      const transport: Transport = { send: sendSpy };
-
-      const cleanup = observe({
-        transport,
-        sampleRate: 0.5, // 50% sample rate, random = 0.3 < 0.5
+    it('should validate flushInterval', () => {
+      expect(() => observe({
+        flushInterval: 0,
         vitals: false,
         errors: false,
-      });
+      })).toThrow('[svoose] flushInterval must be >= 100ms');
+    });
 
-      expect(cleanup).toBeTypeOf('function');
-      cleanup();
+    it('should validate sampling rate', () => {
+      expect(() => observe({
+        sampling: 1.5,
+        vitals: false,
+        errors: false,
+      })).toThrow('[svoose] sampling rate must be between 0 and 1');
     });
   });
 
@@ -765,6 +755,131 @@ describe('observe', () => {
           timestamp: Date.now(),
         });
       }).not.toThrow();
+
+      cleanup();
+    });
+  });
+
+  describe('onError callback', () => {
+    it('should call onError when sync transport throws', () => {
+      const onError = vi.fn();
+      const transport: Transport = {
+        send: () => { throw new Error('sync fail'); },
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 1,
+        onError,
+      });
+
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'sync fail' }));
+
+      cleanup();
+    });
+
+    it('should call onError when async transport rejects', async () => {
+      const onError = vi.fn();
+      const transport: Transport = {
+        send: () => Promise.reject(new Error('async fail')),
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 1,
+        onError,
+      });
+
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      // Wait for promise rejection to be handled
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'async fail' }));
+
+      cleanup();
+    });
+
+    it('should not throw when onError is not provided and transport fails', () => {
+      const transport: Transport = {
+        send: () => { throw new Error('no handler'); },
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 1,
+      });
+
+      const observer = getGlobalObserver();
+
+      expect(() => {
+        observer!({
+          type: 'transition',
+          machineId: 'test',
+          from: 'a',
+          to: 'b',
+          event: 'NEXT',
+          timestamp: Date.now(),
+        });
+      }).not.toThrow();
+
+      cleanup();
+    });
+
+    it('should wrap non-Error thrown values into Error objects', () => {
+      const onError = vi.fn();
+      const transport: Transport = {
+        send: () => { throw 'string error'; },
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 1,
+        onError,
+      });
+
+      const observer = getGlobalObserver();
+      observer!({
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      expect(onError).toHaveBeenCalledOnce();
+      const arg = onError.mock.calls[0][0];
+      expect(arg).toBeInstanceOf(Error);
+      expect(arg.message).toBe('string error');
 
       cleanup();
     });

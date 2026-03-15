@@ -90,7 +90,10 @@ export function createMachine<
   /**
    * Check if a transition is valid (exists and guard passes)
    */
-  function canTransition(eventType: TEvent['type']): boolean {
+  function canTransition(event: TEvent['type'] | TEvent): boolean {
+    const eventType = typeof event === 'string' ? event : event.type;
+    const eventObj = typeof event === 'string' ? { type: event } as TEvent : event;
+
     const stateConfig = config.states[_state];
     if (!stateConfig?.on) return false;
 
@@ -100,12 +103,16 @@ export function createMachine<
     // If it's just a target state string, it's always valid
     if (typeof transition === 'string') return true;
 
-    // If there's a guard, check it (with empty event for can() check)
+    // If there's a guard, check it
     if (transition.guard) {
-      return transition.guard(_context, { type: eventType } as Extract<
-        TEvent,
-        { type: typeof eventType }
-      >);
+      try {
+        return transition.guard(_context, eventObj as Extract<
+          TEvent,
+          { type: typeof eventType }
+        >);
+      } catch {
+        return false; // guard threw = can't transition
+      }
     }
 
     return true;
@@ -227,8 +234,8 @@ export function createMachine<
     matchesAny(...states: TState[]): boolean {
       return states.includes(_state);
     },
-    can(eventType: TEvent['type']): boolean {
-      return canTransition(eventType);
+    can(event: TEvent['type'] | TEvent): boolean {
+      return canTransition(event);
     },
     send,
     destroy,

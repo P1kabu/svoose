@@ -109,8 +109,8 @@ export interface Machine<
   matches(state: TState): boolean;
   /** Check if machine is in any of given states */
   matchesAny(...states: TState[]): boolean;
-  /** Check if event can be sent (has valid transition) */
-  can(eventType: TEvent['type']): boolean;
+  /** Check if event can be sent (has valid transition). Accepts string or full event object for payload-dependent guards. */
+  can(event: TEvent['type'] | TEvent): boolean;
   /** Send event to machine */
   send(event: TEvent | TEvent['type']): void;
   /** Cleanup machine (unregister from error tracking) */

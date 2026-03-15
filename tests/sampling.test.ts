@@ -26,12 +26,6 @@ describe('sampling', () => {
         expect(sampler.getRate('transitions')).toBe(0.5);
       });
 
-      it('should keep identify at 1.0 when using simple rate', () => {
-        const sampler = createSampler(0.1);
-
-        expect(sampler.getRate('identify')).toBe(1);
-      });
-
       it('should handle rate of 0 (disabled)', () => {
         const sampler = createSampler(0);
 
@@ -89,15 +83,6 @@ describe('sampling', () => {
         expect(sampler.getRate('errors')).toBe(1); // default
         expect(sampler.getRate('custom')).toBe(1); // default
         expect(sampler.getRate('transitions')).toBe(1); // default
-        expect(sampler.getRate('identify')).toBe(1); // default
-      });
-
-      it('should allow custom identify rate', () => {
-        const sampler = createSampler({
-          identify: 0.5,
-        });
-
-        expect(sampler.getRate('identify')).toBe(0.5);
       });
     });
 
@@ -165,10 +150,6 @@ describe('sampling', () => {
 
     it('should map transition to transitions', () => {
       expect(eventTypeToSamplingType('transition')).toBe('transitions');
-    });
-
-    it('should map identify to identify', () => {
-      expect(eventTypeToSamplingType('identify')).toBe('identify');
     });
 
     it('should return null for unknown types', () => {
@@ -408,7 +389,7 @@ describe('sampling', () => {
         batchSize: 1,
       });
 
-      // Reset counter after observe() setup (sampleRate check calls random)
+      // Reset counter after observe() setup
       const randomCallsBeforeEvent = randomCallCount;
 
       const observer = getGlobalObserver();

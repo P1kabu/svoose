@@ -1,7 +1,12 @@
 import * as esbuild from 'esbuild';
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'fs';
 import { gzipSync } from 'zlib';
+
+// Step 0: Clean dist
+if (existsSync('dist')) {
+  rmSync('dist', { recursive: true });
+}
 
 // Step 1: Generate TypeScript declarations
 console.log('📝 Generating TypeScript declarations...');

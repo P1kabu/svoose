@@ -30,6 +30,7 @@ export interface ErrorEvent {
   sessionId?: string;
   machineId?: string;
   machineState?: string;
+  machines?: Array<{ id: string; state: string }>;
 }
 
 export interface UnhandledRejectionEvent {
@@ -40,6 +41,7 @@ export interface UnhandledRejectionEvent {
   sessionId?: string;
   machineId?: string;
   machineState?: string;
+  machines?: Array<{ id: string; state: string }>;
 }
 
 export type ObserveErrorEvent = ErrorEvent | UnhandledRejectionEvent;
@@ -83,7 +85,7 @@ export interface CustomMetricEvent {
   name: string;
   metricKind?: 'counter' | 'gauge' | 'histogram';
   value?: number;
-  data: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   timestamp: number;
   sessionId?: string;
 }
@@ -162,8 +164,6 @@ export interface SamplingConfig {
   custom?: number;
   /** Sampling rate for state machine transition events (default: 1) */
   transitions?: number;
-  /** Sampling rate for identify events (default: 1) */
-  identify?: number;
 }
 
 /**
@@ -232,11 +232,8 @@ export interface ObserveOptions {
    */
   session?: SessionOption;
 
-  /**
-   * @deprecated Use `sampling` instead. Will be removed in v0.3.0.
-   * Global sampling rate (0-1) - applies to entire observer
-   */
-  sampleRate?: number;
+  /** Callback for transport errors (e.g., failed sends) */
+  onError?: (error: Error) => void;
 
   /** Log to console */
   debug?: boolean;

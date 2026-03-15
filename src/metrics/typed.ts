@@ -18,7 +18,7 @@ import { metric } from './metric.js';
  * m('unknown_event', {});                                 // ❌ TypeScript error
  */
 export function createTypedMetric<T extends Record<string, Record<string, unknown>>>() {
-  return function <K extends keyof T & string>(name: K, data: T[K]): void {
-    metric(name, data);
+  return function <K extends keyof T & string>(name: K, metadata: T[K]): void {
+    metric(name, metadata);
   };
 }

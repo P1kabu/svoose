@@ -6,9 +6,8 @@ import {
   histogram,
   createTypedMetric,
   setMetricEmitter,
-  _getPendingEventsCount,
-  _clearPendingEvents,
 } from '../src/metrics/index.js';
+import { _getPendingEventsCount, _clearPendingEvents } from '../src/metrics/metric.js';
 import { observe } from '../src/observe/observe.svelte.js';
 import type { Transport, ObserveEvent, CustomMetricEvent } from '../src/types/index.js';
 
@@ -49,7 +48,7 @@ describe('metric', () => {
       const event = events[0] as CustomMetricEvent;
       expect(event.type).toBe('custom');
       expect(event.name).toBe('checkout_started');
-      expect(event.data).toEqual({ step: 1, cartTotal: 99.99 });
+      expect(event.metadata).toEqual({ step: 1, cartTotal: 99.99 });
       expect(event.timestamp).toBeTypeOf('number');
     });
 
@@ -63,7 +62,7 @@ describe('metric', () => {
       const event = events[0] as CustomMetricEvent;
       expect(event.type).toBe('custom');
       expect(event.name).toBe('button_clicked');
-      expect(event.data).toEqual({});
+      expect(event.metadata).toEqual({});
     });
 
     it('should include timestamp', () => {
@@ -259,7 +258,7 @@ describe('metric', () => {
       expect(event.name).toBe('page_views');
       expect(event.metricKind).toBe('counter');
       expect(event.value).toBe(1);
-      expect(event.data).toEqual({});
+      expect(event.metadata).toEqual({});
     });
 
     it('should emit with custom value and metadata', () => {
@@ -272,7 +271,7 @@ describe('metric', () => {
       const event = events[0] as CustomMetricEvent;
       expect(event.metricKind).toBe('counter');
       expect(event.value).toBe(3);
-      expect(event.data).toEqual({ category: 'electronics' });
+      expect(event.metadata).toEqual({ category: 'electronics' });
     });
 
     it('should buffer to pending when no emitter', () => {
@@ -294,7 +293,7 @@ describe('metric', () => {
       expect(event.name).toBe('active_users');
       expect(event.metricKind).toBe('gauge');
       expect(event.value).toBe(42);
-      expect(event.data).toEqual({});
+      expect(event.metadata).toEqual({});
     });
 
     it('should include metadata', () => {
@@ -304,7 +303,7 @@ describe('metric', () => {
       gauge('memory_usage_mb', 256, { heap: 'old' });
 
       const event = events[0] as CustomMetricEvent;
-      expect(event.data).toEqual({ heap: 'old' });
+      expect(event.metadata).toEqual({ heap: 'old' });
     });
 
     it('should buffer to pending when no emitter', () => {
@@ -326,7 +325,7 @@ describe('metric', () => {
       expect(event.name).toBe('response_time_ms');
       expect(event.metricKind).toBe('histogram');
       expect(event.value).toBe(123);
-      expect(event.data).toEqual({});
+      expect(event.metadata).toEqual({});
     });
 
     it('should include metadata', () => {
@@ -336,7 +335,7 @@ describe('metric', () => {
       histogram('payload_size', 4096, { route: '/api/data' });
 
       const event = events[0] as CustomMetricEvent;
-      expect(event.data).toEqual({ route: '/api/data' });
+      expect(event.metadata).toEqual({ route: '/api/data' });
     });
 
     it('should buffer to pending when no emitter', () => {
@@ -357,9 +356,9 @@ describe('metric', () => {
       expect(event.metricKind).toBe('counter');
       expect(event.value).toBe(5);
       // Not duplicated in data
-      expect(event.data).toEqual({ extra: 'info' });
-      expect((event.data as any).metricKind).toBeUndefined();
-      expect((event.data as any).value).toBeUndefined();
+      expect(event.metadata).toEqual({ extra: 'info' });
+      expect((event.metadata as any).metricKind).toBeUndefined();
+      expect((event.metadata as any).value).toBeUndefined();
     });
 
     it('plain metric() should not have metricKind or value', () => {
@@ -390,11 +389,11 @@ describe('metric', () => {
       expect(events).toHaveLength(2);
       const e1 = events[0] as CustomMetricEvent;
       expect(e1.name).toBe('checkout_started');
-      expect(e1.data).toEqual({ step: 1, cartTotal: 99.99 });
+      expect(e1.metadata).toEqual({ step: 1, cartTotal: 99.99 });
 
       const e2 = events[1] as CustomMetricEvent;
       expect(e2.name).toBe('button_clicked');
-      expect(e2.data).toEqual({ id: 'submit' });
+      expect(e2.metadata).toEqual({ id: 'submit' });
     });
   });
 
