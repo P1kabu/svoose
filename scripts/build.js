@@ -25,11 +25,16 @@ const shared = {
   treeShaking: true,
 };
 
-// Build all source files
-const entryPoints = [
+// Split entry points: .svelte.ts files need special minification
+const svelteEntryPoints = [
+  'src/observe/observe.svelte.ts',
+  'src/machine/machine.svelte.ts',
+  'src/svelte/index.svelte.ts',
+];
+
+const regularEntryPoints = [
   'src/index.ts',
   'src/observe/index.ts',
-  'src/observe/observe.svelte.ts',
   'src/observe/vitals.ts',
   'src/observe/errors.ts',
   'src/observe/sampling.ts',
@@ -38,9 +43,7 @@ const entryPoints = [
   'src/metrics/metric.ts',
   'src/metrics/typed.ts',
   'src/machine/index.ts',
-  'src/machine/machine.svelte.ts',
   'src/machine/types.ts',
-  'src/svelte/index.svelte.ts',
   'src/transport/index.ts',
   'src/transport/transport.ts',
   'src/transport/fetch.ts',
@@ -49,9 +52,22 @@ const entryPoints = [
   'src/types/index.ts',
 ];
 
+// Regular files: full minification
 await esbuild.build({
   ...shared,
-  entryPoints,
+  entryPoints: regularEntryPoints,
+  outdir: 'dist',
+  outExtension: { '.js': '.js' },
+});
+
+// Svelte files: no identifier minification (Svelte 5 reserves $ prefix)
+await esbuild.build({
+  ...shared,
+  minify: false,
+  minifySyntax: true,
+  minifyWhitespace: true,
+  minifyIdentifiers: false,
+  entryPoints: svelteEntryPoints,
   outdir: 'dist',
   outExtension: { '.js': '.js' },
 });
