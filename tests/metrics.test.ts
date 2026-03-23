@@ -5,9 +5,8 @@ import {
   gauge,
   histogram,
   createTypedMetric,
-  setMetricEmitter,
 } from '../src/metrics/index.js';
-import { _getPendingEventsCount, _clearPendingEvents } from '../src/metrics/metric.js';
+import { setMetricEmitter, _getPendingEventsCount, _clearPendingEvents } from '../src/metrics/metric.js';
 import { observe } from '../src/observe/observe.svelte.js';
 import type { Transport, ObserveEvent, CustomMetricEvent } from '../src/types/index.js';
 

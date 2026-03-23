@@ -226,22 +226,26 @@ observe({
 
 ---
 
-### Planned
+---
 
-#### v0.1.10 — Retry Logic
+#### v0.1.10 — Retry Logic + DX Foundation
 
-**Status**: Planned
-**Target**: March 2026, Week 2-3
+**Released**: March 2026
 
 | Feature | Description |
 |---------|-------------|
-| **Retry Logic** | Exponential backoff (3 attempts, 1s → 30s) |
-| **Backoff Strategies** | fixed, linear, exponential |
-| **Jitter** | ±10% randomization to avoid thundering herd |
-| **Timeout** | AbortController timeout for fetch |
-| **Unload check** | Abort retry on page close |
+| **Retry Logic** | Configurable retry with exponential/linear/fixed backoff |
+| **Backoff Strategies** | fixed, linear, exponential with optional jitter (±10%) |
+| **Timeout** | AbortController timeout for fetch requests |
+| **Unload check** | Abort retry via shouldAbort callback |
+| **`withRetry()` utility** | Standalone retry wrapper for any async function |
+| **`getStats()`** | Events buffered/sent/dropped + lastSendTime + transportErrors |
+| **`onEvent()` hook** | Passive event subscription (foundation for devtools) |
+| **`flush()` / `destroy()`** | `observe()` returns ObserveInstance (callable + methods) |
+| **Default hybrid transport** | `observe()` defaults to hybrid (fetch + beacon on unload) |
+| **`productionDefaults` preset** | Sensible defaults for production traffic |
 
-**Bundle**: ~5.7 KB (+0.2 KB)
+**Bundle**: 6.7 KB full / 5.1 KB observe-only (measured)
 
 ```typescript
 import { createFetchTransport } from 'svoose/transport';
@@ -269,10 +273,12 @@ observe({
 
 ---
 
-#### v0.1.11 — Privacy Utilities
+### Planned
+
+#### v0.1.11 — Privacy Utilities + Error Fingerprinting
 
 **Status**: Planned
-**Target**: March 2026, Week 3
+**Target**: March-April 2026
 
 | Feature | Description |
 |---------|-------------|
@@ -281,8 +287,10 @@ observe({
 | **Custom Sanitizer** | Custom event sanitization callback |
 | **Privacy Options** | stripQueryParams, stripHash |
 | **configurePII overwrite** | Each call replaces previous config (not merge) |
+| **Error Fingerprinting** | Client-side hash (message + first stack frame) |
+| **Error Dedup** | Optional window-based deduplication of duplicate errors |
 
-**Bundle**: ~5.9 KB (+0.2 KB)
+**Bundle**: ~6.0 KB (+0.1 KB)
 
 ```typescript
 import { observe, configurePII } from 'svoose';
@@ -300,24 +308,30 @@ observe({
 
 ---
 
-### v0.2.0 — Production-Ready Observability
+### v0.2.0 — Production-Ready Observability + Dev Overlay
 
 **Status**: Planned
-**Target**: March 2026, Week 4
+**Target**: April 2026
 
-> **Major release**: Complete production-ready observability stack + Bundle Restructure
+> **Major release**: Complete production-ready observability stack + Dev Overlay + "Collect + Connect" strategy
+>
+> **Strategy: "Collect + Connect"** — svoose is the best client-side collector for Svelte.
+> We show data in dev (overlay). We send it wherever you want (Grafana, your DB).
+> We do NOT build dashboards or backends — we provide templates and examples.
 
 | Feature | Description |
 |---------|-------------|
 | **Network Detection** | Pause/resume on offline/online |
-| **Offline Queue** | In-memory queue with FIFO eviction (localStorage deferred to v0.2.1) |
+| **Offline Queue** | In-memory queue with FIFO eviction |
 | **User Identification** | `identify()` for analytics |
 | **Bundle Restructure** | Modular entry points for tree-shaking |
-| **flush() API** | Public flush without destroying observer |
 | **Rate Limiter** | `maxEventsPerSecond` circuit breaker |
 | **NavigationEvent type** | Type stub for future SvelteKit route tracking |
+| **Dev Overlay** | `svoose/devtools` — real-time vitals, errors, stats in browser |
+| **Grafana template** | JSON dashboard template for import |
+| **Reference backends** | Example repos (SvelteKit+SQLite, Express+PostgreSQL) |
 
-**Bundle**: core ~3.5 KB, full ~6 KB (tree-shakeable)
+**Bundle**: core ~6 KB, devtools +2-3 KB (separate entry, 0 if not imported)
 
 ```typescript
 import { observe, identify } from 'svoose';
@@ -340,7 +354,12 @@ const obs = observe({
 
 // User identification
 identify({ id: 'user_123', traits: { plan: 'premium' } });
-identify(null); // logout (emits event with previousUserId)
+
+// Dev overlay (0 bytes in production)
+if (import.meta.env.DEV) {
+  const { devtools } = await import('svoose/devtools');
+  devtools(obs);
+}
 ```
 
 ---
@@ -497,13 +516,13 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 ## Bundle Size Targets
 
-### Current (v0.1.9 measured)
+### Current (v0.1.10 measured)
 
 | Import | Size (gzip) |
 |--------|-------------|
-| `observe()` + vitals + errors + metrics | 3.8 KB |
-| Full bundle (incl. machine, transport) | 5.5 KB |
-| `createMachine()` only | 0.85 KB |
+| `observe()` + vitals + errors + metrics | 5.1 KB |
+| Full bundle (incl. machine, transport) | 6.7 KB |
+| `createMachine()` only | 0.95 KB |
 
 ### v0.2.0+ (modular entry points)
 
@@ -515,11 +534,13 @@ After v1.0.0, svoose enters **maintenance mode**:
 | `svoose/privacy` | +0.4 KB | configurePII, scrubbing |
 | `svoose/transport` | +0.8 KB | fetch, beacon, hybrid, retry |
 | `svoose/svelte` | +0.3 KB | useMachine |
+| `svoose/devtools` | +2-3 KB | Dev overlay (dev only, 0 in prod) |
 | `svoose/sveltekit` | +1.5 KB | hooks, plugin (v0.3.0) |
-| **Full production** | **~6 KB** | Everything together |
+| **Full production** | **~6 KB** | Everything together (excl. devtools) |
 
 > **Philosophy**: Most apps only need core (~3.5 KB). Pay only for what you import.
 > **Backward compat**: Main `svoose` entry always re-exports all modules. Subpath imports are optional for bundle optimization.
+> **Dev Overlay**: `svoose/devtools` is dev-only — 0 bytes in production builds when behind `import.meta.env.DEV` guard.
 
 ---
 
@@ -557,12 +578,12 @@ After v1.0.0, svoose enters **maintenance mode**:
 ├── Feb          v0.1.7 — Extended Metrics + Typed API
 │
 ├── Mar Week 1   v0.1.8 — Beacon + Hybrid Transport
-├── Mar Week 2   v0.1.9 — API Cleanup (Breaking) ← current
-├── Mar Week 2-3 v0.1.10 — Retry Logic
-├── Mar Week 3   v0.1.11 — Privacy Utilities
-├── Mar Week 4   v0.2.0 — Production-Ready Observability (major)
+├── Mar Week 2   v0.1.9 — API Cleanup (Breaking)
+├── Mar Week 3   v0.1.10 — Retry + DX Foundation ← current
+├── Mar-Apr      v0.1.11 — Privacy + Error Fingerprinting
+├── Apr          v0.2.0 — Production-Ready + Dev Overlay ⭐
 │
-├── Apr          v0.2.1 — Breadcrumbs
+├── May          v0.2.1 — Breadcrumbs
 ├── May          v0.2.2 — Navigation Events + Soft Navigation
 ├── May          v0.2.3 — Request Correlation
 │
@@ -641,6 +662,7 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-03-15 | 16.0 | **"Collect + Connect" strategy**: Dev Overlay added to v0.2.0, error fingerprinting added to v0.1.11, DX foundation (getStats/onEvent/flush/destroy) moved to v0.1.10. Grafana template + reference backends planned for v0.2.0. Source maps = docs-only (no implementation). Integration testing plan added. Dashboard package rejected (scope creep, violates philosophy). |
 | 2026-03-15 | 15.0 | Plan sync: Fixed v0.1.11 (overwrite not merge, removed excludeUserAgent), v0.2.0 (offline=in-memory, added flush/rate-limiter/NavigationEvent, removed already-done multi-machine). Added v0.2.1-v0.2.3 roadmap (breadcrumbs, navigation, correlation). Expanded v0.3.0/v0.3.1 SvelteKit plan. |
 | 2026-03-09 | 14.0 | v0.1.9 released: API Cleanup (Breaking). Removed `sampleRate`, `identify` from sampling, `data`→`metadata`, sync console transport, `can()` full event, multi-machine error context, options validation, transport error handling, session storage warning. 206 tests, 5.5KB full. |
 | 2026-03-01 | 13.0 | v0.1.8 released: Beacon + Hybrid Transport (`createBeaconTransport`, `createHybridTransport`), INP memory leak fix. Fetch transport cleaned up (removed beacon fallback). Updated bundle sizes (5.3KB full). |

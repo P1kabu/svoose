@@ -116,11 +116,39 @@ export interface BeaconTransportOptions {
   onError?: (error: Error) => void;
 }
 
+// ============================================
+// Retry Types
+// ============================================
+
+export interface RetryConfig {
+  /** Number of retry attempts (default: 3) */
+  attempts: number;
+  /** Backoff strategy (default: 'exponential') */
+  backoff: 'fixed' | 'linear' | 'exponential';
+  /** Initial delay in ms (default: 1000) */
+  initialDelay?: number;
+  /** Maximum delay in ms (default: 30000) */
+  maxDelay?: number;
+  /** Add ±10% randomization to prevent thundering herd (default: false) */
+  jitter?: boolean;
+}
+
+export interface FetchTransportOptions extends TransportOptions {
+  /** Retry configuration for failed sends */
+  retry?: RetryConfig;
+  /** Request timeout in ms */
+  timeout?: number;
+}
+
 export interface HybridTransportOptions extends TransportOptions {
   /** Default transport mode (default: 'fetch') */
   default?: 'fetch' | 'beacon';
   /** Transport mode during page unload (default: 'beacon') */
   onUnload?: 'fetch' | 'beacon';
+  /** Retry configuration (passed to fetch transport only, beacon never retries) */
+  retry?: RetryConfig;
+  /** Request timeout in ms (passed to fetch transport only) */
+  timeout?: number;
 }
 
 export interface HybridTransport extends Transport {
@@ -237,4 +265,53 @@ export interface ObserveOptions {
 
   /** Log to console */
   debug?: boolean;
+}
+
+// ============================================
+// Observe Instance (returned by observe())
+// ============================================
+
+/**
+ * Statistics about the observer's activity
+ */
+export interface ObserveStats {
+  /** Total events buffered since start */
+  buffered: number;
+  /** Total events sent to transport */
+  sent: number;
+  /** Total events dropped (sampling, filter) */
+  dropped: number;
+  /** Timestamp of last successful send (0 if never sent) */
+  lastSendTime: number;
+  /** Total transport errors */
+  transportErrors: number;
+}
+
+/**
+ * Observe instance — callable for backward compat, with methods for new API.
+ *
+ * @example
+ * // Backward compatible — calling instance === destroy()
+ * const cleanup = observe({ endpoint: '/api/metrics' });
+ * cleanup();
+ *
+ * @example
+ * // New API — use methods
+ * const obs = observe({ endpoint: '/api/metrics' });
+ * obs.getStats();
+ * obs.flush();
+ * obs.onEvent((event) => console.log(event));
+ * obs.destroy();
+ */
+export interface ObserveInstance {
+  /** Destroy the observer (backward compat — same as destroy()) */
+  (): void;
+  /** Flush buffered events to transport immediately */
+  flush(): void;
+  /** Stop observing and flush remaining events */
+  destroy(): void;
+  /** Get current stats (events buffered/sent/dropped) */
+  getStats(): ObserveStats;
+  /** Subscribe to events passing through the pipeline. Returns unsubscribe function. */
+  onEvent(callback: (event: ObserveEvent) => void): () => void;
 }

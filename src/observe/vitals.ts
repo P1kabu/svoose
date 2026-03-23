@@ -136,14 +136,22 @@ export function observeCLS(callback: (metric: Metric) => void): () => void {
   observer.observe({ type: 'layout-shift', buffered: true });
 
   // Listen for lifecycle events to report final CLS
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  window.addEventListener('pagehide', onPageHide);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', onPageHide);
+  }
 
   // Cleanup function
   return () => {
     observer.disconnect();
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-    window.removeEventListener('pagehide', onPageHide);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', onPageHide);
+    }
 
     // Report final value on disconnect if not already reported
     if (!hasReported && maxSessionValue > 0) {
@@ -203,6 +211,7 @@ export function observeLCP(callback: (metric: Metric) => void): () => void {
   };
 
   const removeEventListeners = () => {
+    if (typeof document === 'undefined') return;
     document.removeEventListener('visibilitychange', onVisibilityChange);
     // Use capture to catch events before they're handled
     ['keydown', 'click', 'pointerdown'].forEach((type) => {
@@ -213,10 +222,12 @@ export function observeLCP(callback: (metric: Metric) => void): () => void {
   observer.observe({ type: 'largest-contentful-paint', buffered: true });
 
   // Listen for events that finalize LCP
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  ['keydown', 'click', 'pointerdown'].forEach((type) => {
-    document.addEventListener(type, onInput, { capture: true, once: true });
-  });
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    ['keydown', 'click', 'pointerdown'].forEach((type) => {
+      document.addEventListener(type, onInput, { capture: true, once: true });
+    });
+  }
 
   return () => {
     if (!hasReported && lcpValue > 0) {
@@ -317,13 +328,21 @@ export function observeINP(callback: (metric: Metric) => void): () => void {
 
   observer.observe({ type: 'event', buffered: true, durationThreshold: 16 } as PerformanceObserverInit);
 
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  window.addEventListener('pagehide', onPageHide);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', onPageHide);
+  }
 
   return () => {
     observer.disconnect();
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-    window.removeEventListener('pagehide', onPageHide);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', onPageHide);
+    }
 
     if (!hasReported && maxINP > 0) {
       reportINP();

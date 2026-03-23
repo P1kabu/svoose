@@ -1,8 +1,11 @@
 /**
- * Minimal FSM with Svelte 5 Runes support
+ * Minimal FSM implementation
  *
- * Note: When used with Svelte 5, state and context are reactive via $state.
- * When used outside Svelte, they work as regular properties.
+ * This file provides the core non-reactive machine logic.
+ * For Svelte 5 reactivity ($state runes), use useMachine() from 'svoose/svelte'.
+ *
+ * Note: .svelte.ts extension is required because this file is imported by
+ * the svelte module which uses runes — the Svelte compiler needs consistent extension.
  */
 
 import { registerMachineContext, unregisterMachineContext } from '../observe/errors.js';

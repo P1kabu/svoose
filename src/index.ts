@@ -8,7 +8,12 @@
 // Core Observability
 // ============================================
 export { observe } from './observe/index.js';
-export type { ObserveOptions } from './observe/index.js';
+export type { ObserveOptions, ObserveInstance, ObserveStats } from './observe/index.js';
+
+// ============================================
+// Presets
+// ============================================
+export { productionDefaults } from './observe/index.js';
 
 // ============================================
 // Sampling
@@ -47,8 +52,8 @@ export type { Metric, MetricName, MetricRating } from './observe/index.js';
 // ============================================
 // Transport
 // ============================================
-export { createFetchTransport, createConsoleTransport, createBeaconTransport, createHybridTransport } from './transport/index.js';
-export type { Transport, TransportOptions, BeaconTransportOptions, HybridTransportOptions, HybridTransport } from './transport/index.js';
+export { createFetchTransport, createConsoleTransport, createBeaconTransport, createHybridTransport, calculateDelay, withRetry } from './transport/index.js';
+export type { Transport, TransportOptions, BeaconTransportOptions, HybridTransportOptions, HybridTransport, RetryConfig, FetchTransportOptions } from './transport/index.js';
 
 // ============================================
 // State Machines

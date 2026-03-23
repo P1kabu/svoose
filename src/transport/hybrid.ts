@@ -10,6 +10,9 @@ import { createBeaconTransport } from './beacon.js';
  * Create a hybrid transport that switches between fetch and beacon
  * based on page lifecycle events
  *
+ * Retry/timeout config is passed ONLY to the fetch sub-transport.
+ * Beacon NEVER retries (fire-and-forget by design).
+ *
  * @param endpoint - URL to send events to
  * @param options - Hybrid transport options
  */
@@ -17,11 +20,12 @@ export function createHybridTransport(
   endpoint: string,
   options: HybridTransportOptions = {}
 ): HybridTransport {
-  const defaultMode = options.default ?? 'fetch';
-  const unloadMode = options.onUnload ?? 'beacon';
+  const { default: defaultMode = 'fetch', onUnload = 'beacon', retry, timeout, ...transportOptions } = options;
 
-  const fetchTransport = createFetchTransport(endpoint, options);
-  const beaconTransport = createBeaconTransport(endpoint, options);
+  // Fetch transport GETS retry config
+  const fetchTransport = createFetchTransport(endpoint, { ...transportOptions, retry, timeout });
+  // Beacon transport NEVER gets retry
+  const beaconTransport = createBeaconTransport(endpoint, transportOptions);
 
   let isUnloading = false;
 
@@ -44,7 +48,7 @@ export function createHybridTransport(
   }
 
   function getActiveTransport() {
-    const mode = isUnloading ? unloadMode : defaultMode;
+    const mode = isUnloading ? onUnload : defaultMode;
     return mode === 'beacon' ? beaconTransport : fetchTransport;
   }
 

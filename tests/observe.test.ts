@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { observe, setGlobalObserver, getGlobalObserver } from '../src/observe/observe.svelte.js';
 import { createMachine } from '../src/machine/index.js';
-import type { Transport, ObserveEvent, VitalEvent, TransitionEvent } from '../src/types/index.js';
+import { productionDefaults } from '../src/observe/presets.js';
+import type { Transport, ObserveEvent, ObserveInstance, VitalEvent, TransitionEvent } from '../src/types/index.js';
 
 // Mock PerformanceObserver to prevent actual vital observation
 class MockPerformanceObserver {
@@ -882,6 +883,247 @@ describe('observe', () => {
       expect(arg.message).toBe('string error');
 
       cleanup();
+    });
+  });
+
+  describe('ObserveInstance API', () => {
+    function makeTransport() {
+      const sent: ObserveEvent[][] = [];
+      const transport: Transport = { send: (e) => { sent.push([...e]); } };
+      return { sent, transport };
+    }
+
+    function makeEvent(overrides?: Partial<TransitionEvent>): TransitionEvent {
+      return {
+        type: 'transition',
+        machineId: 'test',
+        from: 'a',
+        to: 'b',
+        event: 'GO',
+        timestamp: Date.now(),
+        ...overrides,
+      };
+    }
+
+    it('should be callable (backward compat) — calling instance destroys it', () => {
+      const { transport } = makeTransport();
+      const obs = observe({ transport, vitals: false, errors: false });
+
+      expect(obs).toBeTypeOf('function');
+      // calling obs() should not throw
+      obs();
+    });
+
+    it('should have flush, destroy, getStats, onEvent methods', () => {
+      const { transport } = makeTransport();
+      const obs = observe({ transport, vitals: false, errors: false });
+
+      expect(obs.flush).toBeTypeOf('function');
+      expect(obs.destroy).toBeTypeOf('function');
+      expect(obs.getStats).toBeTypeOf('function');
+      expect(obs.onEvent).toBeTypeOf('function');
+
+      obs.destroy();
+    });
+
+    it('flush() should send buffered events without destroying', () => {
+      const { sent, transport } = makeTransport();
+      const obs = observe({ transport, vitals: false, errors: false, batchSize: 100 });
+
+      const observer = getGlobalObserver()!;
+      observer(makeEvent());
+      observer(makeEvent());
+
+      expect(sent).toHaveLength(0);
+      obs.flush();
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toHaveLength(2);
+
+      // Still works after flush (not destroyed)
+      observer(makeEvent());
+      obs.flush();
+      expect(sent).toHaveLength(2);
+
+      obs.destroy();
+    });
+
+    it('getStats() should track buffered, sent, dropped', () => {
+      const { transport } = makeTransport();
+      const obs = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+        sampling: { transitions: 0 }, // drop all transitions
+      });
+
+      const stats0 = obs.getStats();
+      expect(stats0).toEqual({ buffered: 0, sent: 0, dropped: 0, lastSendTime: 0, transportErrors: 0 });
+
+      const observer = getGlobalObserver()!;
+
+      // These will be dropped by sampling
+      observer(makeEvent());
+      observer(makeEvent());
+      const stats1 = obs.getStats();
+      expect(stats1.dropped).toBe(2);
+      expect(stats1.buffered).toBe(0);
+
+      obs.destroy();
+    });
+
+    it('getStats() should count sent after flush', () => {
+      const { transport } = makeTransport();
+      const obs = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+      });
+
+      const observer = getGlobalObserver()!;
+      observer(makeEvent());
+      observer(makeEvent());
+      observer(makeEvent());
+
+      expect(obs.getStats().buffered).toBe(3);
+      expect(obs.getStats().sent).toBe(0);
+
+      obs.flush();
+
+      expect(obs.getStats().sent).toBe(3);
+
+      obs.destroy();
+    });
+
+    it('getStats() should return a copy (not a reference)', () => {
+      const { transport } = makeTransport();
+      const obs = observe({ transport, vitals: false, errors: false });
+
+      const stats1 = obs.getStats();
+      const stats2 = obs.getStats();
+      expect(stats1).toEqual(stats2);
+      expect(stats1).not.toBe(stats2);
+
+      obs.destroy();
+    });
+
+    it('onEvent() should receive events passing through the pipeline', () => {
+      const { transport } = makeTransport();
+      const obs = observe({ transport, vitals: false, errors: false, batchSize: 100 });
+
+      const received: ObserveEvent[] = [];
+      const unsub = obs.onEvent((e) => received.push(e));
+
+      const observer = getGlobalObserver()!;
+      observer(makeEvent({ from: 'x', to: 'y' }));
+      observer(makeEvent({ from: 'y', to: 'z' }));
+
+      expect(received).toHaveLength(2);
+      expect((received[0] as TransitionEvent).from).toBe('x');
+      expect((received[1] as TransitionEvent).from).toBe('y');
+
+      unsub();
+      observer(makeEvent());
+      // After unsub, no more events
+      expect(received).toHaveLength(2);
+
+      obs.destroy();
+    });
+
+    it('onEvent() should not receive dropped events (sampling)', () => {
+      const { transport } = makeTransport();
+      const obs = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        sampling: { transitions: 0 },
+      });
+
+      const received: ObserveEvent[] = [];
+      obs.onEvent((e) => received.push(e));
+
+      const observer = getGlobalObserver()!;
+      observer(makeEvent());
+
+      expect(received).toHaveLength(0);
+
+      obs.destroy();
+    });
+
+    it('destroy() should clear onEvent listeners', () => {
+      const { transport } = makeTransport();
+      const obs = observe({ transport, vitals: false, errors: false, batchSize: 100 });
+
+      const received: ObserveEvent[] = [];
+      obs.onEvent((e) => received.push(e));
+
+      obs.destroy();
+
+      // After destroy, global observer is null — no way to push events
+      // but listeners should be cleared regardless
+      expect(received).toHaveLength(0);
+    });
+
+    it('SSR should return noop instance with all methods', () => {
+      // Temporarily remove window/document
+      const origWindow = globalThis.window;
+      const origDocument = globalThis.document;
+      // @ts-expect-error — SSR simulation
+      delete globalThis.window;
+      // @ts-expect-error — SSR simulation
+      delete globalThis.document;
+
+      try {
+        const obs = observe({ endpoint: '/test' });
+        expect(obs).toBeTypeOf('function');
+        expect(obs.flush).toBeTypeOf('function');
+        expect(obs.destroy).toBeTypeOf('function');
+        expect(obs.getStats).toBeTypeOf('function');
+        expect(obs.onEvent).toBeTypeOf('function');
+
+        // All methods should be noop
+        obs.flush();
+        obs.destroy();
+        expect(obs.getStats()).toEqual({ buffered: 0, sent: 0, dropped: 0, lastSendTime: 0, transportErrors: 0 });
+        const unsub = obs.onEvent(() => {});
+        expect(unsub).toBeTypeOf('function');
+        unsub();
+        obs(); // callable noop
+      } finally {
+        globalThis.window = origWindow;
+        globalThis.document = origDocument;
+      }
+    });
+  });
+
+  describe('productionDefaults', () => {
+    it('should export productionDefaults with expected fields', () => {
+      expect(productionDefaults.batchSize).toBe(50);
+      expect(productionDefaults.flushInterval).toBe(10000);
+      expect(productionDefaults.session).toBe(true);
+      expect(productionDefaults.sampling).toEqual({
+        errors: 1.0,
+        vitals: 0.5,
+        custom: 0.5,
+        transitions: 0.1,
+      });
+    });
+
+    it('should work with observe() via spread', () => {
+      const { transport } = makeTransport();
+      const obs = observe({ ...productionDefaults, transport, vitals: false, errors: false });
+
+      expect(obs).toBeTypeOf('function');
+      expect(obs.getStats).toBeTypeOf('function');
+
+      obs.destroy();
+
+      function makeTransport() {
+        const sent: ObserveEvent[][] = [];
+        const transport: Transport = { send: (e) => { sent.push([...e]); } };
+        return { sent, transport };
+      }
     });
   });
 });

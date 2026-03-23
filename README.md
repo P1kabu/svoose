@@ -2,16 +2,16 @@
 
 > Svelte + Goose = **svoose** — the goose that sees everything
 
-Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **~5.5KB gzipped** (core ~3.8KB).
+Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **~6.7KB gzipped** (observe-only ~5.1KB).
 
 ## Features
 
 - **Web Vitals** — CLS, LCP, FID, INP, FCP, TTFB (no external deps)
 - **Error Tracking** — global errors + unhandled rejections
-- **Custom Metrics** — `metric()`, `counter()`, `gauge()`, `histogram()` (v0.1.6+)
-- **Beacon Transport** — reliable delivery on page close with auto-chunking (v0.1.8+)
-- **Session Tracking** — automatic sessionId with timeout (v0.1.5+)
-- **Sampling** — per-event-type rate limiting (v0.1.3+)
+- **Custom Metrics** — `metric()`, `counter()`, `gauge()`, `histogram()`
+- **Beacon Transport** — reliable delivery on page close with auto-chunking
+- **Session Tracking** — automatic sessionId with timeout
+- **Sampling** — per-event-type rate limiting
 - **State Machines** — minimal FSM with TypeScript inference
 - **Svelte 5 Native** — reactive `useMachine()` hook with $state runes
 - **Tree-shakeable** — pay only for what you use
@@ -22,15 +22,60 @@ Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree
 npm install svoose
 ```
 
+> svoose works without Svelte. The `svelte` peer dependency is optional — only needed if you use `svoose/svelte` (useMachine hook).
+
 ## Quick Start
 
-```typescript
-import { observe, createMachine } from 'svoose';
+### Step 1: See what svoose collects
 
-// Start collecting metrics
+Start with the console transport — you'll see events in DevTools immediately, no backend needed:
+
+```typescript
+import { observe, createConsoleTransport } from 'svoose';
+
+const cleanup = observe({
+  transport: createConsoleTransport({ pretty: true }),
+});
+
+// Open DevTools console — you'll see Web Vitals, errors, and metrics as they happen
+```
+
+### Step 2: Send to your backend
+
+When you're ready, switch to an endpoint:
+
+```typescript
+import { observe } from 'svoose';
+
+const obs = observe({
+  endpoint: '/api/metrics',
+  errors: true,
+  vitals: true,
+  session: true,
+});
+
+// New API
+obs.flush();              // send buffered events now
+obs.getStats();           // { buffered: 3, sent: 47, dropped: 0 }
+obs.onEvent(e => ...);    // subscribe to events
+
+// Stop observing when done
+obs.destroy();
+// or: obs() — backward compatible, same as destroy()
+```
+
+### Step 3: Add custom metrics and state machines
+
+```typescript
+import { observe, metric, counter, createMachine } from 'svoose';
+
 observe({ endpoint: '/api/metrics' });
 
-// Create a state machine
+// Track custom events
+metric('checkout_started', { step: 1, cartTotal: 99.99 });
+counter('page_views');
+
+// State machine with automatic transition tracking
 const auth = createMachine({
   id: 'auth',
   initial: 'idle',
@@ -48,14 +93,190 @@ const auth = createMachine({
     },
     authenticated: { on: { LOGOUT: 'idle' } },
   },
-  observe: true, // Track transitions
+  observe: true,
 });
 
-// Use it
 auth.send('LOGIN');
-auth.state; // 'loading'
-auth.context; // { user: null }
 ```
+
+## What Data Looks Like
+
+svoose sends JSON arrays via `POST` to your endpoint. Here's an example batch:
+
+```json
+[
+  {
+    "type": "vital",
+    "name": "LCP",
+    "value": 1234,
+    "rating": "good",
+    "delta": 1234,
+    "timestamp": 1710500000000,
+    "url": "https://myapp.com/dashboard",
+    "sessionId": "1710500000000-a1b2c3"
+  },
+  {
+    "type": "error",
+    "message": "Cannot read properties of null (reading 'id')",
+    "stack": "TypeError: Cannot read properties...\n    at handleClick (app.js:42)",
+    "filename": "app.js",
+    "lineno": 42,
+    "timestamp": 1710500001000,
+    "url": "https://myapp.com/dashboard",
+    "sessionId": "1710500000000-a1b2c3",
+    "machineId": "auth",
+    "machineState": "loading"
+  },
+  {
+    "type": "transition",
+    "machineId": "auth",
+    "from": "idle",
+    "to": "loading",
+    "event": "LOGIN",
+    "timestamp": 1710500002000,
+    "sessionId": "1710500000000-a1b2c3"
+  },
+  {
+    "type": "custom",
+    "name": "page_views",
+    "metricKind": "counter",
+    "value": 1,
+    "timestamp": 1710500003000,
+    "sessionId": "1710500000000-a1b2c3"
+  }
+]
+```
+
+**Event types:**
+
+| Type | When | Key fields |
+|------|------|------------|
+| `vital` | Web Vital measured (LCP, CLS, INP, etc.) | `name`, `value`, `rating` |
+| `error` | Uncaught error | `message`, `stack`, `machineState` |
+| `unhandled-rejection` | Unhandled promise rejection | `reason`, `machineState` |
+| `transition` | State machine transition | `machineId`, `from`, `to`, `event` |
+| `custom` | `metric()`, `counter()`, `gauge()`, `histogram()` | `name`, `metricKind`, `value`, `metadata` |
+
+### What data leaves your browser
+
+Every event svoose sends is JSON you can inspect with `createConsoleTransport()`. Here's what each field contains:
+
+| Field | Source | May contain PII? |
+|-------|--------|-----------------|
+| `url` | `location.href` at event time | Yes — query params may have tokens (`?token=xxx`) |
+| `message`, `stack` | Error object | Yes — error text may include user data |
+| `machineId`, `machineState` | Your machine config | No (developer-defined strings) |
+| `sessionId` | Random generated ID | No (not tied to user identity) |
+| `name`, `value`, `metadata` | Your `metric()` / `counter()` calls | Depends on what you pass |
+
+> **Tip**: Use a `filter` to strip sensitive data before it's sent:
+> ```typescript
+> observe({
+>   endpoint: '/api/metrics',
+>   filter: (event) => {
+>     if ('url' in event) {
+>       (event as any).url = event.url.split('?')[0]; // strip query params
+>     }
+>     return true;
+>   },
+> });
+> ```
+
+## Receiving Events (Backend)
+
+svoose is a **client-side collector** — it doesn't include a backend. Your server just needs one POST endpoint that accepts a JSON array.
+
+### SvelteKit
+
+> Planned for v0.3.0 — not yet implemented. The API below is a preview of the planned integration.
+
+```typescript
+// src/routes/api/metrics/+server.ts
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+
+export const POST: RequestHandler = async ({ request }) => {
+  const events = await request.json();
+
+  // Option 1: Log to stdout (pipe to your log aggregator)
+  console.log(JSON.stringify(events));
+
+  // Option 2: Insert into database
+  // await db.insert('events', events);
+
+  return json({ ok: true }, { status: 200 });
+};
+```
+
+### Express
+
+```typescript
+import express from 'express';
+const app = express();
+app.use(express.json());
+
+app.post('/api/metrics', (req, res) => {
+  const events = req.body; // ObserveEvent[]
+
+  // Store, forward, or log — up to you
+  for (const event of events) {
+    if (event.type === 'error') {
+      console.error(`[${event.machineState ?? 'unknown'}] ${event.message}`);
+    }
+  }
+
+  res.sendStatus(204);
+});
+```
+
+### No backend? No problem
+
+```typescript
+// Development — just log to console
+observe({ transport: createConsoleTransport({ pretty: true }) });
+
+// Production without backend — silent noop
+observe({ transport: { send: () => {} } });
+```
+
+### Production recommendations
+
+Use the built-in production preset for sensible defaults:
+
+```typescript
+import { observe, productionDefaults } from 'svoose';
+
+observe({ ...productionDefaults, endpoint: '/api/metrics' });
+// Includes: batchSize 50, flushInterval 10s, sampling, sessions
+```
+
+Or configure manually for production traffic (1000+ users):
+
+```typescript
+observe({
+  endpoint: '/api/metrics',
+
+  // Larger batches = fewer HTTP requests
+  batchSize: 50,
+  flushInterval: 10000,
+
+  // Sample to reduce volume
+  sampling: {
+    errors: 1.0,       // never skip errors
+    vitals: 0.5,       // 50% is enough for p75/p95 stats
+    custom: 0.5,
+    transitions: 0.1,  // transitions are high-volume
+  },
+
+  // Handle transport failures
+  onError: (err) => console.error('svoose transport failed:', err),
+
+  // Track sessions
+  session: true,
+});
+```
+
+**Volume math**: 1000 users with default settings (`batchSize: 10`, `flushInterval: 5s`) = ~200 req/s to your endpoint. With `batchSize: 50` + `flushInterval: 10s` + `sampling: 0.5` = ~10 req/s.
 
 ## API
 
@@ -65,12 +286,10 @@ Start collecting Web Vitals and errors.
 
 ```typescript
 const cleanup = observe({
-  // Where to send data (Option 1: endpoint)
+  // Where to send data
   endpoint: '/api/metrics',
 
-  // Or use custom transport (Option 2: transport)
-  // NOTE: endpoint and transport are mutually exclusive
-  // If transport is provided, endpoint is ignored
+  // Or use custom transport (overrides endpoint)
   transport: myTransport,
 
   // What to collect
@@ -81,19 +300,22 @@ const cleanup = observe({
   batchSize: 10,
   flushInterval: 5000,
 
-  // Sampling (v0.1.3+) — number or per-event-type config
+  // Sampling — number or per-event-type config
   sampling: {
-    vitals: 0.1,             // 10% — sufficient for statistics
-    errors: 1.0,             // 100% — all errors matter
-    custom: 0.5,             // 50% of custom metrics
+    vitals: 0.1,             // 10%
+    errors: 1.0,             // 100%
+    custom: 0.5,             // 50%
     transitions: 0.0,        // disabled
   },
 
-  // Sessions (v0.1.5+)
+  // Sessions
   session: true,             // or { timeout: 30 * 60 * 1000, storage: 'sessionStorage' }
 
-  // Error callback (v0.1.9+) — handle transport failures
+  // Error callback — handle transport failures
   onError: (err) => console.error('Transport failed:', err),
+
+  // Filter events before sending
+  filter: (event) => !(event.type === 'vital' && event.name === 'TTFB'),
 
   // Debug
   debug: false,
@@ -104,44 +326,39 @@ cleanup();
 ```
 
 > **Note**: If neither `endpoint` nor `transport` is provided, defaults to `endpoint: '/api/metrics'`.
+> The default transport is hybrid (fetch + beacon on page close) for reliable delivery.
 
-#### Sampling (v0.1.3+)
+#### Sampling
 
-Control what percentage of events are sent to your backend:
+Control what percentage of events are sent:
 
 ```typescript
 // Simple: same rate for all events
-observe({
-  endpoint: '/api/metrics',
-  sampling: 0.1, // 10% of all events
-});
+observe({ sampling: 0.1 }); // 10% of everything
 
-// Per-event-type: recommended for production
+// Per-event-type (recommended)
 observe({
-  endpoint: '/api/metrics',
   sampling: {
     vitals: 0.1,       // 10% — sufficient for accurate statistics
     errors: 1.0,       // 100% — capture all errors
     custom: 0.5,       // 50% of custom metrics
-    transitions: 0.0,  // disabled — no state machine events
+    transitions: 0.0,  // disabled
   },
 });
 ```
 
-#### Sessions (v0.1.5+)
+#### Sessions
 
 Automatic session tracking with configurable timeout:
 
 ```typescript
+// Enable with defaults (30 min timeout, sessionStorage)
+observe({ session: true });
+
+// Or custom config
 observe({
-  endpoint: '/api/metrics',
-
-  // Enable with defaults (30 min timeout, sessionStorage)
-  session: true,
-
-  // Or custom config
   session: {
-    timeout: 60 * 60 * 1000,  // 1 hour in milliseconds = new session after 1h inactivity
+    timeout: 60 * 60 * 1000,  // 1 hour
     storage: 'localStorage',   // 'sessionStorage' | 'localStorage' | 'memory'
   },
 });
@@ -150,78 +367,43 @@ observe({
 // { type: 'vital', name: 'LCP', value: 1234, sessionId: '1706123456789-abc123def' }
 ```
 
-> **Note**: `timeout` is in **milliseconds**. Common values: `30 * 60 * 1000` (30 min), `60 * 60 * 1000` (1 hour).
-
 **Storage options:**
 - `sessionStorage` (default) — session per browser tab
 - `localStorage` — session persists across tabs
 - `memory` — no persistence, new session on page reload
 
-**Features:**
-- Automatic session ID generation (timestamp + random)
-- Session expires after inactivity timeout (default: 30 min)
-- Graceful degradation in private mode
-- SSR safe
+#### Web Vitals
 
-#### Web Vitals (v0.1.5+)
-
-svoose collects all Core Web Vitals using the standard [web-vitals](https://github.com/GoogleChrome/web-vitals) algorithm:
+svoose collects all Core Web Vitals using the standard [web-vitals](https://github.com/GoogleChrome/web-vitals) algorithm (own implementation, no external dependency):
 
 | Metric | What it measures | When reported |
 |--------|------------------|---------------|
-| **CLS** | Visual stability (layout shifts) | On page hide/visibility change |
-| **LCP** | Loading performance | On user input or visibility change |
-| **INP** | Responsiveness (max interaction) | On page hide/visibility change |
+| **CLS** | Visual stability (layout shifts) | On page hide |
+| **LCP** | Loading performance | On user input or page hide |
+| **INP** | Responsiveness (max interaction) | On page hide |
 | **FCP** | First content painted | Once |
 | **TTFB** | Server response time | Once |
 | **FID** | First input delay (deprecated) | Once |
 
-**Web Vitals Reporting (v0.1.5+)**:
-
-All vitals follow the [web-vitals](https://github.com/GoogleChrome/web-vitals) standard:
-
-**CLS (Cumulative Layout Shift)**:
-- Groups shifts into sessions (max 5s, max 1s gap)
-- Reports maximum session value on page hide
-
-**LCP (Largest Contentful Paint)**:
-- Tracks largest content element painted
-- Finalized on first user interaction (click/keydown) or visibility change
-
-**INP (Interaction to Next Paint)**:
-- Tracks maximum interaction duration
-- Only counts discrete events with `interactionId` (ignores scroll, etc.)
-- Reports on page hide
-
 ```typescript
-// All vitals report automatically on page lifecycle events
+// All vitals
 observe({ vitals: true });
 
 // Select specific vitals
 observe({ vitals: ['CLS', 'LCP', 'INP'] });
 ```
 
-> **Note (v0.1.5 breaking change)**: CLS, LCP, and INP now report once per page lifecycle instead of on every update. This matches Chrome DevTools and Google Search Console behavior.
+> CLS, LCP, and INP report once per page lifecycle (matches Chrome DevTools and Google Search Console behavior).
 
-#### Custom Metrics (v0.1.6+)
+#### Custom Metrics
 
 Track custom events for analytics:
 
 ```typescript
-import { metric } from 'svoose';
+import { metric, counter, gauge, histogram } from 'svoose';
 
-// Basic usage — metric(name, metadata?)
+// Basic event
 metric('checkout_started', { step: 1, cartTotal: 99.99 });
-metric('button_clicked', { id: 'submit-btn' });
-metric('feature_used', { name: 'dark_mode', enabled: true });
-```
-
-##### Metric Helpers (v0.1.7+)
-
-Typed helpers for common metric patterns:
-
-```typescript
-import { counter, gauge, histogram } from 'svoose';
 
 // Counter — increments (default value: 1)
 counter('page_views');
@@ -236,9 +418,9 @@ histogram('response_time_ms', 123);
 histogram('payload_size', 4096, { route: '/api/data' });
 ```
 
-All helpers emit `CustomMetricEvent` with top-level `metricKind`, `value`, and optional `metadata` fields for easy backend processing.
+**Buffer behavior**: If `metric()` / `counter()` / `gauge()` / `histogram()` is called before `observe()`, events are buffered (max 100). They're automatically flushed when `observe()` initializes.
 
-##### Typed Metrics (v0.1.7+)
+##### Typed Metrics
 
 Full TypeScript autocomplete for metric names and metadata shapes:
 
@@ -250,25 +432,10 @@ const track = createTypedMetric<{
   button_clicked: { id: string };
 }>();
 
-track('checkout_started', { step: 1, cartTotal: 99.99 }); // ✅ autocomplete
-track('button_clicked', { id: 'submit' });                 // ✅
-track('unknown_event', {});                                 // ❌ TypeScript error
+track('checkout_started', { step: 1, cartTotal: 99.99 }); // autocomplete
+track('button_clicked', { id: 'submit' });                 // autocomplete
+track('unknown_event', {});                                 // TypeScript error
 ```
-
-Events are automatically batched with other metrics. You can control the sampling rate:
-
-```typescript
-observe({
-  endpoint: '/api/metrics',
-  sampling: {
-    custom: 0.5,  // 50% of custom metrics
-    vitals: 0.1,
-    errors: 1.0,
-  },
-});
-```
-
-**Buffer behavior**: If `metric()` / `counter()` / `gauge()` / `histogram()` is called before `observe()`, events are buffered (max 100). They're automatically flushed when `observe()` initializes.
 
 ### `createMachine(config)`
 
@@ -290,27 +457,26 @@ const machine = createMachine({
   },
 });
 
-// State & context (use useMachine() from svoose/svelte for reactivity)
 machine.state;              // 'off'
 machine.context;            // { count: 0 }
 
-// Check state
+// Note: context is shallow-cloned from your initial object.
+// Nested objects/arrays are shared references — same as XState.
+// If you need a deep clone, pass structuredClone(ctx) yourself.
+
 machine.matches('off');     // true
 machine.matchesAny('on', 'off'); // true
 
-// Check if event is valid
 machine.can('TOGGLE');      // true
 machine.can({ type: 'SET', value: 42 }); // full event for payload-dependent guards
 
-// Send events
 machine.send('TOGGLE');
 machine.send({ type: 'SET', value: 42 });
 
-// Cleanup
 machine.destroy();
 ```
 
-### Guards & Actions
+#### Guards & Actions
 
 ```typescript
 const counter = createMachine({
@@ -322,12 +488,12 @@ const counter = createMachine({
       on: {
         INCREMENT: {
           target: 'active',
-          guard: (ctx) => ctx.count < 10,    // Only if count < 10
+          guard: (ctx) => ctx.count < 10,
           action: (ctx) => ({ count: ctx.count + 1 }),
         },
         DECREMENT: {
           target: 'active',
-          guard: (ctx) => ctx.count > 0,     // Only if count > 0
+          guard: (ctx) => ctx.count > 0,
           action: (ctx) => ({ count: ctx.count - 1 }),
         },
       },
@@ -336,7 +502,7 @@ const counter = createMachine({
 });
 ```
 
-### Entry & Exit Actions
+#### Entry & Exit Actions
 
 ```typescript
 const wizard = createMachine({
@@ -359,82 +525,117 @@ const wizard = createMachine({
 });
 ```
 
-### Observability Integration
+#### Observability Integration
 
 Machines automatically integrate with `observe()`:
 
 ```typescript
-// Errors include machine context
 observe({ errors: true });
 
+// Simple
+const auth = createMachine({ id: 'auth', observe: true, /* ... */ });
+
+// Or detailed config
 const auth = createMachine({
   id: 'auth',
-  observe: true, // Track transitions
-  // or
-  observe: {
-    transitions: true,
-    context: true, // Include context in events
-  },
+  observe: { transitions: true, context: true },
+  // ...
 });
 
 // When an error occurs, it includes all active machines:
-// { machineId: 'auth', machineState: 'loading', machines: [{ id: 'auth', state: 'loading' }], ... }
+// { machineId: 'auth', machineState: 'loading', machines: [{ id: 'auth', state: 'loading' }] }
 ```
 
-### Custom Transport
+### Transports
+
+#### Retry & Timeout
+
+Add retry logic with configurable backoff to any fetch-based transport:
 
 ```typescript
-import { observe, createFetchTransport, createConsoleTransport } from 'svoose';
+import { createFetchTransport } from 'svoose';
 
-// Fetch with custom headers
+const transport = createFetchTransport('/api/metrics', {
+  retry: {
+    attempts: 3,
+    backoff: 'exponential',  // 'fixed' | 'linear' | 'exponential'
+    initialDelay: 1000,       // 1s → 2s → 4s
+    maxDelay: 30000,
+    jitter: true,             // ±10% randomization
+  },
+  timeout: 10000,  // 10s per request
+});
+```
+
+Works with hybrid transport too — retry applies to fetch only, beacon never retries:
+
+```typescript
+import { createHybridTransport } from 'svoose';
+
+observe({
+  transport: createHybridTransport('/api/metrics', {
+    retry: { attempts: 3, backoff: 'exponential' },
+    timeout: 10000,
+  }),
+});
+```
+
+`withRetry()` is also available as a standalone utility for custom transports:
+
+```typescript
+import { withRetry } from 'svoose';
+
+await withRetry(
+  (signal) => fetch('/api/metrics', { method: 'POST', body, signal }),
+  { attempts: 3, backoff: 'exponential' },
+  { timeout: 5000 }
+);
+```
+
+#### Fetch Transport (default)
+
+```typescript
+import { observe, createFetchTransport } from 'svoose';
+
 const transport = createFetchTransport('/api/metrics', {
   headers: { 'Authorization': 'Bearer xxx' },
   onError: (err) => console.error(err),
 });
 observe({ transport });
-
-// Console only (for development) — no network requests
-observe({ transport: createConsoleTransport({ pretty: true }) });
-
-// Noop (silent, for production without backend)
-observe({ transport: { send: () => {} } });
-
-// Custom transport (Sentry, Datadog, etc.)
-const myTransport = {
-  async send(events) {
-    await myApi.track(events);
-  },
-};
-observe({ transport: myTransport });
-
-// Dev vs Prod pattern
-const isDev = import.meta.env.DEV;
-observe({
-  transport: isDev
-    ? createConsoleTransport({ pretty: true })
-    : createFetchTransport('/api/metrics'),
-});
 ```
 
-#### Beacon & Hybrid Transport (v0.1.8+)
-
-Prevent data loss on page close with `sendBeacon`:
+#### Console Transport (development)
 
 ```typescript
-import { createBeaconTransport, createHybridTransport } from 'svoose';
+import { observe, createConsoleTransport } from 'svoose';
 
-// Beacon only — guaranteed delivery on page close
+observe({ transport: createConsoleTransport({ pretty: true }) });
+```
+
+#### Beacon Transport
+
+Guaranteed delivery on page close via `navigator.sendBeacon`:
+
+```typescript
+import { observe, createBeaconTransport } from 'svoose';
+
 observe({
   transport: createBeaconTransport('/api/metrics', {
     maxPayloadSize: 60000, // auto-chunks if exceeded (default: 60KB)
   }),
 });
+```
 
-// Hybrid (recommended for production)
-// Uses fetch normally, switches to beacon on page close
+#### Hybrid Transport (recommended for production)
+
+Uses fetch normally, switches to beacon on page close:
+
+```typescript
+import { observe, createHybridTransport } from 'svoose';
+
 const transport = createHybridTransport('/api/metrics', {
-  default: 'fetch',     // normal operation
-  onUnload: 'beacon',   // page close / tab switch
+  default: 'fetch',
+  onUnload: 'beacon',
   headers: { 'Authorization': 'Bearer xxx' },
 });
 
@@ -444,70 +645,32 @@ observe({ transport });
 transport.destroy();
 ```
 
-## Bundle Size
-
-Tree-shakeable — pay only for what you use:
-
-| Import | Size (gzip) |
-|--------|-------------|
-| `observe()` + vitals + errors + metrics | ~3.8 KB |
-| `createMachine()` only | ~0.85 KB |
-| Full bundle (v0.1.x) | ~5.5 KB |
-| Full production (v0.2.0+) | ~6 KB |
-
-> Most apps only need `observe()` core (~3.8 KB). Compare: Sentry ~20KB, PostHog ~40KB.
-
-## TypeScript
-
-Full TypeScript support with inference:
+#### Custom Transport
 
 ```typescript
-type AuthEvent =
-  | { type: 'LOGIN'; email: string }
-  | { type: 'SUCCESS'; user: User }
-  | { type: 'ERROR'; message: string }
-  | { type: 'LOGOUT' };
-
-const auth = createMachine<
-  { user: User | null; error: string | null },
-  'idle' | 'loading' | 'authenticated',
-  AuthEvent
->({
-  id: 'auth',
-  initial: 'idle',
-  context: { user: null, error: null },
-  states: {
-    // States are type-checked
-    idle: {
-      on: {
-        // Events are type-checked
-        LOGIN: 'loading',
-      },
-    },
-    loading: {
-      on: {
-        SUCCESS: {
-          target: 'authenticated',
-          // event.user is typed as User
-          action: (ctx, event) => ({ user: event.user }),
-        },
-      },
-    },
-    authenticated: {
-      on: { LOGOUT: 'idle' },
-    },
+// Forward to any service
+const myTransport = {
+  async send(events) {
+    await myApi.track(events);
   },
-});
+};
+observe({ transport: myTransport });
+```
 
-auth.matches('idle');     // ✓ type-checked
-auth.matches('invalid');  // ✗ TypeScript error
-auth.send('LOGOUT');      // ✓ type-checked
-auth.send('INVALID');     // ✗ TypeScript error
+#### Dev vs Prod Pattern
+
+```typescript
+const isDev = import.meta.env.DEV;
+observe({
+  transport: isDev
+    ? createConsoleTransport({ pretty: true })
+    : createHybridTransport('/api/metrics'),
+});
 ```
 
 ## Svelte 5 Usage
 
-### Reactive State Machines (Recommended)
+### Reactive State Machines
 
 Use `useMachine()` from `svoose/svelte` for automatic reactivity:
 
@@ -515,7 +678,6 @@ Use `useMachine()` from `svoose/svelte` for automatic reactivity:
 <script lang="ts">
   import { useMachine } from 'svoose/svelte';
 
-  // State machine with automatic Svelte 5 reactivity
   const toggle = useMachine({
     id: 'toggle',
     initial: 'off',
@@ -524,9 +686,6 @@ Use `useMachine()` from `svoose/svelte` for automatic reactivity:
       on: { on: { TOGGLE: 'off' } },
     },
   });
-
-  // toggle.state and toggle.context are reactive!
-  // Changes automatically trigger re-renders
 </script>
 
 <button onclick={() => toggle.send('TOGGLE')}>
@@ -546,7 +705,6 @@ Use `useMachine()` from `svoose/svelte` for automatic reactivity:
   import { useMachine } from 'svoose/svelte';
   import { onMount, onDestroy } from 'svelte';
 
-  // Start observing
   let cleanup: (() => void) | null = null;
 
   onMount(() => {
@@ -555,12 +713,11 @@ Use `useMachine()` from `svoose/svelte` for automatic reactivity:
 
   onDestroy(() => cleanup?.());
 
-  // Reactive machine with observation
   const auth = useMachine({
     id: 'auth',
     initial: 'idle',
     context: { user: null },
-    observe: true, // Track transitions
+    observe: true,
     states: {
       idle: { on: { LOGIN: 'loading' } },
       loading: {
@@ -583,41 +740,81 @@ Use `useMachine()` from `svoose/svelte` for automatic reactivity:
 
 ### Non-Reactive Usage
 
-For non-reactive scenarios (outside components, vanilla JS), use `createMachine()`:
+For non-reactive scenarios (outside components, vanilla JS), use `createMachine()` directly.
+
+## TypeScript
+
+Full TypeScript support with inference:
 
 ```typescript
-import { createMachine } from 'svoose';
+type AuthEvent =
+  | { type: 'LOGIN'; email: string }
+  | { type: 'SUCCESS'; user: User }
+  | { type: 'ERROR'; message: string }
+  | { type: 'LOGOUT' };
 
-const machine = createMachine({
-  id: 'toggle',
-  initial: 'off',
+const auth = createMachine<
+  { user: User | null; error: string | null },
+  'idle' | 'loading' | 'authenticated',
+  AuthEvent
+>({
+  id: 'auth',
+  initial: 'idle',
+  context: { user: null, error: null },
   states: {
-    off: { on: { TOGGLE: 'on' } },
-    on: { on: { TOGGLE: 'off' } },
+    idle: {
+      on: { LOGIN: 'loading' },
+    },
+    loading: {
+      on: {
+        SUCCESS: {
+          target: 'authenticated',
+          action: (ctx, event) => ({ user: event.user }),
+        },
+      },
+    },
+    authenticated: {
+      on: { LOGOUT: 'idle' },
+    },
   },
 });
+
+auth.matches('idle');     // type-checked
+auth.matches('invalid');  // TypeScript error
+auth.send('LOGOUT');      // type-checked
+auth.send('INVALID');     // TypeScript error
 ```
+
+## Bundle Size
+
+Tree-shakeable — pay only for what you use:
+
+| Import | Size (gzip) |
+|--------|-------------|
+| `observe()` + vitals + errors + metrics | ~5.1 KB |
+| `createMachine()` only | ~0.95 KB |
+| Full bundle | ~6.7 KB |
+
+> Compare: Sentry ~20KB, PostHog ~40KB.
+
+## When to use something else
+
+- **Session replay, alerting, team workflows** — use [Sentry](https://sentry.io) or [PostHog](https://posthog.com)
+- **Complex state machines** (parallel states, invoke, spawn) — use [XState](https://xstate.js.org)
+- **Full analytics platform** (funnels, cohorts, A/B tests) — use PostHog or Mixpanel
+
+svoose is best for: lightweight self-hosted observability where you control the data and want minimal bundle overhead.
 
 ## Roadmap
 
-- **v0.1.3** ✅ — Sampling (per-event-type rate limiting)
-- **v0.1.4** ✅ — Hotfix (missing sampling.js)
-- **v0.1.5** ✅ — Session Tracking + CLS Session Windows fix
-- **v0.1.6** ✅ — Custom metrics (`metric()` API)
-- **v0.1.7** ✅ — Extended Metrics (counter/gauge/histogram + typed API)
-- **v0.1.8** ✅ — Beacon + Hybrid Transport
-- **v0.1.9** ✅ — API Cleanup: `data`→`metadata`, `can()` accepts full events, `onError` callback, multi-machine error context, validation
-- **v0.1.10** — Retry Logic
-- **v0.1.11** — Privacy Utilities
-- **v0.2.0** — Production-Ready Observability (User ID, Offline, flush API, Rate Limiter)
-- **v0.2.1** — Breadcrumbs
-- **v0.2.2** — Navigation Events + Soft Navigation
-- **v0.2.3** — Request Correlation
-- **v0.3.0** — SvelteKit Core Integration
-- **v0.3.1** — SvelteKit Vite Plugin
-- **v1.0.0** — Stable Release (Q1 2027)
+- **v0.1.3–v0.1.10** — Done (sampling, sessions, custom metrics, beacon/hybrid transport, API cleanup, retry logic)
 
-> **Note**: FSM is a lightweight bonus feature, not an XState competitor. For complex state machines, use XState.
+- **v0.1.11** — Privacy Utilities (planned)
+- **v0.2.0** — Production-Ready: User ID, Offline, flush API, Rate Limiter (planned)
+- **v0.3.0** — SvelteKit Integration (planned)
+- **v1.0.0** — Stable Release
+
+> FSM is a lightweight bonus feature, not an XState competitor. For complex state machines, use XState.
 
 See [ROADMAP.md](./ROADMAP.md) for detailed plans.
 

@@ -4,15 +4,15 @@
 
 import { vitalObservers, type Metric, type MetricName } from './vitals.js';
 import { observeErrors, type ObserveErrorEvent } from './errors.js';
-import { createFetchTransport } from '../transport/fetch.js';
+import { createHybridTransport } from '../transport/hybrid.js';
 import {
   createSampler,
   eventTypeToSamplingType,
   type Sampler,
 } from './sampling.js';
 import { createSessionManager, type SessionManager } from './session.js';
-import { setMetricEmitter, getMetricEmitter } from '../metrics/index.js';
-import type { ObserveOptions, VitalEvent, ObserveEvent, Transport } from '../types/index.js';
+import { setMetricEmitter, getMetricEmitter } from '../metrics/metric.js';
+import type { ObserveOptions, ObserveInstance, ObserveStats, VitalEvent, ObserveEvent, Transport } from '../types/index.js';
 
 // Default configuration
 const defaults = {
@@ -58,30 +58,47 @@ export function getGlobalObserver(): typeof globalObserverCallback {
   return globalObserverCallback;
 }
 
+// SSR noop instance
+const noopInstance: ObserveInstance = Object.assign(
+  () => {},
+  {
+    flush: () => {},
+    destroy: () => {},
+    getStats: (): ObserveStats => ({ buffered: 0, sent: 0, dropped: 0, lastSendTime: 0, transportErrors: 0 }),
+    onEvent: () => () => {},
+  }
+);
+
 /**
  * Main observe function - starts collecting metrics and errors
  *
  * @param options - Configuration options
- * @returns Cleanup function to stop observing
+ * @returns ObserveInstance — callable (backward compat) with flush/destroy/getStats/onEvent methods
  *
  * @example
- * // Basic usage
- * observe();
+ * // Backward compatible — calling instance === destroy()
+ * const cleanup = observe({ endpoint: '/api/metrics' });
+ * cleanup();
  *
  * @example
- * // With options
- * observe({
- *   endpoint: '/api/metrics',
- *   vitals: ['CLS', 'LCP', 'INP'],
- *   errors: true,
- *   debug: true,
- * });
+ * // New API — use methods
+ * const obs = observe({ endpoint: '/api/metrics' });
+ * obs.getStats();
+ * obs.flush();
+ * obs.onEvent((event) => console.log(event));
+ * obs.destroy();
  */
-export function observe(options: ObserveOptions = {}): () => void {
+export function observe(options: ObserveOptions = {}): ObserveInstance {
+  // SSR guard — silently return noop instance if not in browser
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return noopInstance;
+  }
+
   validateOptions(options);
 
   const config = { ...defaults, ...options };
-  const transport: Transport = config.transport ?? createFetchTransport(config.endpoint);
+  // Default transport: hybrid (fetch + beacon on unload) for reliable delivery
+  const transport: Transport = config.transport ?? createHybridTransport(config.endpoint);
 
   // Create sampler if sampling option is provided
   const sampler: Sampler | null = config.sampling != null
@@ -102,6 +119,12 @@ export function observe(options: ObserveOptions = {}): () => void {
   const buffer: ObserveEvent[] = [];
   let flushTimer: ReturnType<typeof setInterval> | null = null;
 
+  // Stats tracking
+  const stats: ObserveStats = { buffered: 0, sent: 0, dropped: 0, lastSendTime: 0, transportErrors: 0 };
+
+  // Event subscribers
+  const eventListeners: Set<(event: ObserveEvent) => void> = new Set();
+
   // Get current URL
   const getUrl = (): string => {
     try {
@@ -115,6 +138,7 @@ export function observe(options: ObserveOptions = {}): () => void {
   const bufferEvent = (event: ObserveEvent): void => {
     // Apply filter if provided
     if (config.filter && !config.filter(event)) {
+      stats.dropped++;
       return;
     }
 
@@ -122,20 +146,28 @@ export function observe(options: ObserveOptions = {}): () => void {
     if (sampler) {
       const samplingType = eventTypeToSamplingType(event.type);
       if (samplingType && !sampler.shouldSample(samplingType)) {
+        stats.dropped++;
         return;
       }
     }
 
     // Add sessionId if session manager is enabled
     if (sessionManager) {
-      (event as ObserveEvent & { sessionId?: string }).sessionId = sessionManager.getSessionId();
+      // All event types have optional sessionId, safe to assign
+      (event as { sessionId?: string }).sessionId = sessionManager.getSessionId();
     }
 
     if (config.debug) {
       console.log('[svoose]', event);
     }
 
+    // Notify event subscribers
+    for (const listener of eventListeners) {
+      try { listener(event); } catch { /* ignore listener errors */ }
+    }
+
     buffer.push(event);
+    stats.buffered++;
 
     if (buffer.length >= config.batchSize) {
       flush();
@@ -144,6 +176,7 @@ export function observe(options: ObserveOptions = {}): () => void {
 
   // Handle transport errors consistently
   const handleError = (err: unknown): void => {
+    stats.transportErrors++;
     const error = err instanceof Error ? err : new Error(String(err));
     if (config.onError) {
       config.onError(error);
@@ -158,6 +191,8 @@ export function observe(options: ObserveOptions = {}): () => void {
     if (buffer.length === 0) return;
 
     const events = buffer.splice(0, buffer.length);
+    stats.sent += events.length;
+    stats.lastSendTime = Date.now();
     try {
       // Handle both Promise and non-Promise returns from transport.send()
       const result = transport.send(events);
@@ -255,13 +290,28 @@ export function observe(options: ObserveOptions = {}): () => void {
     });
   }
 
-  // Return cleanup function
-  return () => {
+  // Destroy function
+  const destroy = (): void => {
     flush();
     cleanups.forEach((fn) => fn());
+    eventListeners.clear();
     // Destroy transport if it has a destroy method (e.g. HybridTransport)
-    (transport as Transport & { destroy?: () => void }).destroy?.();
+    if ('destroy' in transport && typeof (transport as any).destroy === 'function') {
+      (transport as any).destroy();
+    }
   };
+
+  // Build callable instance: instance() === instance.destroy()
+  const instance = (() => destroy()) as unknown as ObserveInstance;
+  instance.flush = flush;
+  instance.destroy = destroy;
+  instance.getStats = () => ({ ...stats });
+  instance.onEvent = (callback: (event: ObserveEvent) => void) => {
+    eventListeners.add(callback);
+    return () => { eventListeners.delete(callback); };
+  };
+
+  return instance;
 }
 
-export type { ObserveOptions };
+export type { ObserveOptions, ObserveInstance, ObserveStats };

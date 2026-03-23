@@ -2,24 +2,25 @@
  * Fetch-based transport
  */
 
-import type { Transport, TransportOptions } from '../types/index.js';
+import type { Transport, FetchTransportOptions } from '../types/index.js';
+import { withRetry } from './retry.js';
 
 /**
  * Create a fetch-based transport
  * Always uses fetch with keepalive: true
  *
  * @param endpoint - URL to send events to
- * @param options - Transport options (headers, error callback)
+ * @param options - Transport options (headers, error callback, retry, timeout)
  */
 export function createFetchTransport(
   endpoint: string,
-  options: TransportOptions = {}
+  options: FetchTransportOptions = {}
 ): Transport {
   return {
     async send(events) {
       if (events.length === 0) return;
 
-      try {
+      const doFetch = async (signal?: AbortSignal): Promise<void> => {
         await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -28,7 +29,24 @@ export function createFetchTransport(
           },
           body: JSON.stringify(events),
           keepalive: true,
+          signal,
         });
+      };
+
+      try {
+        if (options.retry) {
+          await withRetry(doFetch, options.retry, { timeout: options.timeout });
+        } else if (options.timeout) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), options.timeout);
+          try {
+            await doFetch(controller.signal);
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        } else {
+          await doFetch();
+        }
       } catch (error) {
         options.onError?.(error as Error);
       }

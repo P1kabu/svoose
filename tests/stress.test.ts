@@ -539,4 +539,219 @@ describe('stress tests', () => {
       errorSpy.mockRestore();
     });
   });
+
+  describe('simulated production load', () => {
+    it('should handle 1000 users × 10 events each (10000 total) with production config', () => {
+      let totalEventsSent = 0;
+      let totalBatches = 0;
+      const batchSizes: number[] = [];
+
+      const transport: Transport = {
+        send: (events) => {
+          totalBatches++;
+          totalEventsSent += events.length;
+          batchSizes.push(events.length);
+        },
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 50,
+        flushInterval: 10000,
+        sampling: {
+          errors: 1.0,
+          vitals: 0.5,
+          custom: 0.5,
+          transitions: 0.1,
+        },
+      });
+
+      const observer = getGlobalObserver()!;
+      const userCount = 1000;
+      const eventsPerUser = 10;
+
+      // Simulate 1000 users each sending 10 mixed events
+      for (let user = 0; user < userCount; user++) {
+        for (let e = 0; e < eventsPerUser; e++) {
+          const kind = e % 4;
+          if (kind === 0) {
+            observer({
+              type: 'transition',
+              machineId: `user-${user}`,
+              from: 'idle',
+              to: 'active',
+              event: 'CLICK',
+              timestamp: Date.now(),
+            });
+          } else if (kind === 1) {
+            observer({
+              type: 'vital',
+              name: 'CLS',
+              value: Math.random() * 0.3,
+              rating: 'good',
+              delta: 0.01,
+              timestamp: Date.now(),
+              url: `https://app.com/user/${user}`,
+            });
+          } else if (kind === 2) {
+            observer({
+              type: 'error',
+              message: `Error from user ${user}`,
+              timestamp: Date.now(),
+              url: `https://app.com/user/${user}`,
+            });
+          } else {
+            observer({
+              type: 'custom',
+              name: 'page_interaction',
+              metricKind: 'counter',
+              value: 1,
+              timestamp: Date.now(),
+            });
+          }
+        }
+      }
+
+      // Flush remaining via timer
+      vi.advanceTimersByTime(10000);
+
+      // 10000 total events, sampled:
+      // - transitions (2500 raw) × 0.1 ≈ ~250
+      // - vitals (2500 raw) × 0.5 ≈ ~1250
+      // - errors (2500 raw) × 1.0 = 2500
+      // - custom (2500 raw) × 0.5 ≈ ~1250
+      // Expected total ≈ ~5250 (with random variance)
+
+      // Sampling is random, so use wide bounds
+      expect(totalEventsSent).toBeGreaterThan(3000);
+      expect(totalEventsSent).toBeLessThan(7500);
+
+      // Errors should be ~100% sampled (2500 events)
+      // Total sent should include a large error proportion
+      expect(totalEventsSent).toBeGreaterThan(2500); // at minimum, all errors
+
+      // Batches should be ≤50 each
+      for (const size of batchSizes) {
+        expect(size).toBeLessThanOrEqual(50);
+      }
+
+      // Should have created many batches
+      expect(totalBatches).toBeGreaterThan(50);
+
+      cleanup();
+    });
+
+    it('should handle 10000 events with noop transport (no backend)', () => {
+      const noopTransport: Transport = {
+        send: () => {},
+      };
+
+      const cleanup = observe({
+        transport: noopTransport,
+        vitals: false,
+        errors: false,
+        batchSize: 50,
+        flushInterval: 10000,
+      });
+
+      const observer = getGlobalObserver()!;
+
+      const start = performance.now();
+
+      // Fire 10000 events into noop — should not crash or leak
+      for (let i = 0; i < 10000; i++) {
+        observer({
+          type: 'transition',
+          machineId: 'noop-test',
+          from: 'a',
+          to: 'b',
+          event: 'TICK',
+          timestamp: Date.now(),
+        });
+      }
+
+      vi.advanceTimersByTime(10000);
+
+      const elapsed = performance.now() - start;
+
+      // Should complete quickly — noop transport has zero overhead
+      expect(elapsed).toBeLessThan(5000);
+
+      cleanup();
+    });
+
+    it('should handle 1000 concurrent machines with observe', () => {
+      let totalEventsSent = 0;
+      const transport: Transport = {
+        send: (events) => {
+          totalEventsSent += events.length;
+        },
+      };
+
+      const cleanup = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+        flushInterval: 60000,
+      });
+
+      const machines = [];
+      for (let i = 0; i < 1000; i++) {
+        machines.push(
+          createMachine({
+            id: `user-machine-${i}`,
+            initial: 'idle',
+            context: { clicks: 0 },
+            observe: true,
+            states: {
+              idle: {
+                on: {
+                  CLICK: {
+                    target: 'active',
+                    action: (ctx) => ({ clicks: ctx.clicks + 1 }),
+                  },
+                },
+              },
+              active: {
+                on: {
+                  CLICK: {
+                    target: 'active',
+                    action: (ctx) => ({ clicks: ctx.clicks + 1 }),
+                  },
+                  RESET: 'idle',
+                },
+              },
+            },
+          })
+        );
+      }
+
+      // Each machine does 10 transitions = 10000 total events
+      for (const machine of machines) {
+        machine.send('CLICK'); // idle → active
+        for (let j = 0; j < 8; j++) {
+          machine.send('CLICK'); // active → active
+        }
+        machine.send('RESET'); // active → idle
+      }
+
+      // Verify machine state
+      for (const machine of machines) {
+        expect(machine.state).toBe('idle');
+        expect(machine.context.clicks).toBe(9);
+      }
+
+      cleanup();
+
+      // 1000 machines × 10 transitions = 10000 events
+      expect(totalEventsSent).toBe(10000);
+
+      for (const machine of machines) {
+        machine.destroy();
+      }
+    });
+  });
 });
