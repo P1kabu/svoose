@@ -12,17 +12,28 @@ import {
 } from './sampling.js';
 import { createSessionManager, type SessionManager } from './session.js';
 import { setMetricEmitter, getMetricEmitter } from '../metrics/metric.js';
-import type { ObserveOptions, ObserveInstance, ObserveStats, VitalEvent, ObserveEvent, Transport } from '../types/index.js';
+import { sanitizeEvent } from './privacy.js';
+import { fingerprint as computeFingerprint, createDedupTracker, type DedupTracker } from './fingerprint.js';
+import type {
+  ObserveOptions,
+  ObserveInstance,
+  ObserveStats,
+  VitalEvent,
+  ObserveEvent,
+  Transport,
+  ErrorTrackingConfig,
+  ErrorsOption,
+} from '../types/index.js';
 
 // Default configuration
 const defaults = {
   endpoint: '/api/metrics',
   vitals: true as const,
-  errors: true,
+  errors: true as ErrorsOption,
   batchSize: 10,
   flushInterval: 5000,
   debug: false,
-} satisfies Required<Omit<ObserveOptions, 'transport' | 'filter' | 'sampling' | 'session' | 'onError'>>;
+} satisfies Required<Omit<ObserveOptions, 'transport' | 'filter' | 'sampling' | 'session' | 'onError' | 'privacy'>>;
 
 /**
  * Validate observe options at startup
@@ -110,11 +121,25 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
     ? createSessionManager(config.session, config.debug)
     : null;
 
+  // Resolve error tracking config
+  const errorsConfig: ErrorTrackingConfig | null =
+    typeof config.errors === 'object' && config.errors !== null ? config.errors : null;
+
+  // Optional dedup tracker (only when errors.dedupe === true)
+  const dedupTracker: DedupTracker | null = errorsConfig?.dedupe
+    ? createDedupTracker(errorsConfig.dedupeWindow ?? 60_000)
+    : null;
+
   const cleanups: (() => void)[] = [];
 
   // Cleanup session manager on destroy
   if (sessionManager) {
     cleanups.push(() => sessionManager.destroy());
+  }
+
+  // Cleanup dedup tracker on destroy
+  if (dedupTracker) {
+    cleanups.push(() => dedupTracker.clear());
   }
   const buffer: ObserveEvent[] = [];
   let flushTimer: ReturnType<typeof setInterval> | null = null;
@@ -135,14 +160,49 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
   };
 
   // Buffer an event and potentially flush
-  const bufferEvent = (event: ObserveEvent): void => {
-    // Apply filter if provided
+  //
+  // Pipeline (canonical order — see v0.2.0 plan):
+  //   1. Fingerprint (error events only — uses RAW message before privacy)
+  //   2. Dedup check (drop duplicates within window)
+  //   3. Privacy / sanitize (may DROP via null)
+  //   4. Filter (may DROP)
+  //   5. Sampling (may DROP)
+  //   6. Inject sessionId
+  //   7. Notify onEvent listeners
+  //   8. Buffer
+  const bufferEvent = (incoming: ObserveEvent): void => {
+    let event = incoming;
+
+    // 1. Fingerprint (compute on RAW message before any sanitization)
+    if (event.type === 'error' || event.type === 'unhandled-rejection') {
+      if (!event.fingerprint) {
+        event.fingerprint = computeFingerprint(event);
+      }
+
+      // 2. Dedup check
+      if (dedupTracker && dedupTracker.seen(event.fingerprint, Date.now())) {
+        stats.dropped++;
+        return;
+      }
+    }
+
+    // 3. Privacy / sanitize — may DROP
+    if (config.privacy) {
+      const sanitized = sanitizeEvent(event, config.privacy);
+      if (sanitized === null) {
+        stats.dropped++;
+        return;
+      }
+      event = sanitized;
+    }
+
+    // 4. Filter
     if (config.filter && !config.filter(event)) {
       stats.dropped++;
       return;
     }
 
-    // Apply per-event-type sampling
+    // 5. Sampling
     if (sampler) {
       const samplingType = eventTypeToSamplingType(event.type);
       if (samplingType && !sampler.shouldSample(samplingType)) {
@@ -151,7 +211,7 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
       }
     }
 
-    // Add sessionId if session manager is enabled
+    // 6. Add sessionId if session manager is enabled
     if (sessionManager) {
       // All event types have optional sessionId, safe to assign
       (event as { sessionId?: string }).sessionId = sessionManager.getSessionId();
@@ -161,11 +221,12 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
       console.log('[svoose]', event);
     }
 
-    // Notify event subscribers
+    // 7. Notify event subscribers
     for (const listener of eventListeners) {
       try { listener(event); } catch { /* ignore listener errors */ }
     }
 
+    // 8. Buffer
     buffer.push(event);
     stats.buffered++;
 
@@ -191,13 +252,18 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
     if (buffer.length === 0) return;
 
     const events = buffer.splice(0, buffer.length);
-    stats.sent += events.length;
     stats.lastSendTime = Date.now();
     try {
       // Handle both Promise and non-Promise returns from transport.send()
       const result = transport.send(events);
-      if (result && typeof result.catch === 'function') {
-        result.catch(handleError);
+      if (result && typeof result.then === 'function') {
+        result.then(
+          () => { stats.sent += events.length; },
+          (err) => handleError(err),
+        );
+      } else {
+        // Sync transport succeeded
+        stats.sent += events.length;
       }
     } catch (err) {
       handleError(err);
@@ -296,8 +362,9 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
     cleanups.forEach((fn) => fn());
     eventListeners.clear();
     // Destroy transport if it has a destroy method (e.g. HybridTransport)
-    if ('destroy' in transport && typeof (transport as any).destroy === 'function') {
-      (transport as any).destroy();
+    const destroyable = transport as Transport & { destroy?: () => void };
+    if (typeof destroyable.destroy === 'function') {
+      destroyable.destroy();
     }
   };
 

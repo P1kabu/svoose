@@ -98,9 +98,11 @@ export function observeErrors(
   const rejectionHandler = (event: PromiseRejectionEvent) => {
     const reason = event.reason;
     let message: string;
+    let stack: string | undefined;
 
     if (reason instanceof Error) {
       message = reason.message;
+      stack = reason.stack;
     } else if (typeof reason === 'string') {
       message = reason;
     } else {
@@ -114,6 +116,7 @@ export function observeErrors(
     const rejectionEvent: UnhandledRejectionEvent = {
       type: 'unhandled-rejection',
       reason: message,
+      stack,
       timestamp: Date.now(),
       url: getCurrentUrl(),
       ...getMachineContext(),

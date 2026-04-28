@@ -31,17 +31,22 @@ export interface ErrorEvent {
   machineId?: string;
   machineState?: string;
   machines?: Array<{ id: string; state: string }>;
+  /** Deploy-resistant grouping hash (message + stable function name) */
+  fingerprint?: string;
 }
 
 export interface UnhandledRejectionEvent {
   type: 'unhandled-rejection';
   reason: string;
+  stack?: string;
   timestamp: number;
   url: string;
   sessionId?: string;
   machineId?: string;
   machineState?: string;
   machines?: Array<{ id: string; state: string }>;
+  /** Deploy-resistant grouping hash (reason + stable function name) */
+  fingerprint?: string;
 }
 
 export type ObserveErrorEvent = ErrorEvent | UnhandledRejectionEvent;
@@ -200,6 +205,60 @@ export interface SamplingConfig {
 export type SamplingOption = number | SamplingConfig;
 
 // ============================================
+// Privacy / PII
+// ============================================
+
+/**
+ * Pattern for matching URL parameter names (string for exact match, RegExp for pattern).
+ */
+export type UrlScrubPattern = string | RegExp;
+
+/**
+ * Privacy / PII configuration.
+ *
+ * @remarks
+ * `configurePII()` uses **overwrite** semantics — each call replaces the previous config.
+ * `observe({ privacy })` is the recommended way to configure privacy.
+ */
+export interface PIIConfig {
+  /** URL parameter names (or RegExps) whose values are replaced with `[REDACTED]` */
+  scrubFromUrl?: UrlScrubPattern[];
+  /** Field names in `metadata`/`traits`/`context` to mask (preserve last 4 chars) */
+  maskFields?: string[];
+  /** Drop the entire query string from event URLs */
+  stripQueryParams?: boolean;
+  /** Drop the URL hash fragment from event URLs */
+  stripHash?: boolean;
+  /** URL path prefixes that should cause events to be dropped (e.g. `['/admin', '/login']`) */
+  excludePaths?: string[];
+  /**
+   * Custom sanitizer. Mutate / return a new event, or return `null` to DROP it entirely.
+   * Runs after the built-in transformations.
+   */
+  sanitize?: (event: ObserveEvent) => ObserveEvent | null;
+}
+
+/** Alias used in `ObserveOptions.privacy` */
+export type PrivacyOptions = PIIConfig;
+
+// ============================================
+// Error Tracking Options
+// ============================================
+
+/**
+ * Optional error tracking configuration. Pass `errors: true` to enable with defaults,
+ * or an object to enable client-side deduplication via fingerprinting.
+ */
+export interface ErrorTrackingConfig {
+  /** Drop duplicate error events (same fingerprint) inside `dedupeWindow` (default: false) */
+  dedupe?: boolean;
+  /** Dedupe window in ms (default: 60000 = 1 minute) */
+  dedupeWindow?: number;
+}
+
+export type ErrorsOption = boolean | ErrorTrackingConfig;
+
+// ============================================
 // Observe Options
 // ============================================
 
@@ -211,8 +270,11 @@ export interface ObserveOptions {
 
   /** Collect Web Vitals. true = all, array = selected */
   vitals?: boolean | MetricName[];
-  /** Collect errors */
-  errors?: boolean;
+  /**
+   * Collect errors. `true` = enabled with defaults, or pass an object to enable
+   * client-side deduplication: `{ dedupe: true, dedupeWindow: 60000 }`.
+   */
+  errors?: ErrorsOption;
 
   /** Batch size before sending */
   batchSize?: number;
@@ -259,6 +321,21 @@ export interface ObserveOptions {
    * session: false
    */
   session?: SessionOption;
+
+  /**
+   * Privacy / PII sanitization. Applied as the FIRST stage of the event pipeline,
+   * so subsequent stages (sampling, breadcrumbs, etc.) never see raw PII.
+   *
+   * @example
+   * privacy: {
+   *   scrubFromUrl: ['token', 'api_key', /password/i],
+   *   maskFields: ['email', 'phone'],
+   *   stripQueryParams: true,
+   *   excludePaths: ['/admin', '/login'],
+   *   sanitize: (event) => event, // return null to DROP
+   * }
+   */
+  privacy?: PrivacyOptions;
 
   /** Callback for transport errors (e.g., failed sends) */
   onError?: (error: Error) => void;

@@ -668,6 +668,109 @@ observe({
 });
 ```
 
+## Privacy & PII Sanitization
+
+> Privacy-focused utilities to keep PII out of your event stream. Not a legal compliance guarantee — make your own GDPR/CCPA assessment.
+
+Configure privacy via `observe({ privacy })` (preferred) or `configurePII()` (runtime, overwrite semantics):
+
+```typescript
+import { observe } from 'svoose';
+
+observe({
+  endpoint: '/api/metrics',
+  privacy: {
+    // Replace matching URL params with [REDACTED]
+    scrubFromUrl: ['token', 'api_key', /password/i],
+
+    // Mask values in CustomMetricEvent.metadata (preserves last 4 chars)
+    maskFields: ['email', 'phone'],
+
+    // Drop the query string from event URLs
+    stripQueryParams: true,
+
+    // Drop the URL hash from event URLs
+    stripHash: false,
+
+    // Drop events whose URL prefix matches a sensitive path
+    excludePaths: ['/admin', '/login', '/api/auth'],
+
+    // Custom sanitizer — return null to DROP the event entirely
+    sanitize: (event) => {
+      if ('message' in event && typeof event.message === 'string') {
+        event.message = event.message.replace(
+          /[\w.+-]+@[\w.-]+\.[\w]{2,}/g,
+          '[email]',
+        );
+      }
+      return event;
+    },
+  },
+});
+```
+
+### configurePII() — runtime override
+
+`configurePII()` uses **overwrite** semantics — each call replaces the previous config (KISS). Pass `null` (or `{}`) to reset.
+
+```typescript
+import { configurePII } from 'svoose';
+
+configurePII({ scrubFromUrl: ['session_id'] });
+
+// Later — fully replaces previous config:
+configurePII({ maskFields: ['email'] });
+
+// Reset:
+configurePII(null);
+```
+
+### Pipeline order
+
+Privacy runs **first**, before sampling, filter, or session injection. This ensures dropped events never leak PII into downstream stages:
+
+```
+1. Fingerprint (error events only — uses RAW message)
+2. Dedup check (if errors.dedupe enabled)
+3. Privacy / sanitize  ← runs FIRST
+4. Filter
+5. Sampling
+6. Session ID injection
+7. onEvent listeners
+8. Buffer
+```
+
+## Error Fingerprinting
+
+Error events automatically receive a deploy-resistant `fingerprint` — an 8-char hex hash derived from `message` + the first stable function name in the stack:
+
+```typescript
+{
+  type: 'error',
+  message: 'Cannot read properties of null',
+  stack: '...',
+  fingerprint: 'a1b2c3d4',  // ← stable across deploys with the same call site
+  ...
+}
+```
+
+**Why deploy-resistant?** Minified file names contain build hashes (`app-Bx7k2.js:1:43567`) that change every deploy. Same error → different fingerprint → grouping breaks. svoose uses the qualified function name (`Object.handler`, `HTMLButtonElement.onclick`), which stays stable across builds. Single-letter minified names (`a`, `b`) are skipped.
+
+### Optional client-side dedup
+
+A single broken button can fire thousands of identical errors per minute. Sampling is random and won't suppress dupes. Enable client-side dedup to drop duplicate fingerprints inside a sliding window:
+
+```typescript
+observe({
+  errors: {
+    dedupe: true,
+    dedupeWindow: 60_000, // 1 minute (default)
+  },
+});
+```
+
+Within the window, repeats of the same fingerprint are dropped (`stats.dropped++`). After the window, the next occurrence passes again.
+
 ## Svelte 5 Usage
 
 ### Reactive State Machines

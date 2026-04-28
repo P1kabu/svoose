@@ -1126,4 +1126,102 @@ describe('observe', () => {
       }
     });
   });
+
+  describe('stats.sent accuracy (v0.1.11 fix)', () => {
+    it('should NOT increment stats.sent when sync transport throws', () => {
+      const transport: Transport = {
+        send: () => { throw new Error('boom'); },
+      };
+
+      const obs = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+      });
+
+      const observer = getGlobalObserver()!;
+      observer({
+        type: 'transition',
+        machineId: 'm',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      obs.flush();
+
+      const stats = obs.getStats();
+      expect(stats.sent).toBe(0);
+      expect(stats.transportErrors).toBe(1);
+      obs.destroy();
+    });
+
+    it('should NOT increment stats.sent when async transport rejects', async () => {
+      const transport: Transport = {
+        send: async () => { throw new Error('boom'); },
+      };
+
+      const obs = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+      });
+
+      const observer = getGlobalObserver()!;
+      observer({
+        type: 'transition',
+        machineId: 'm',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      obs.flush();
+      // Drain promise microtasks (don't run all timers — flushInterval would loop)
+      await vi.advanceTimersByTimeAsync(0);
+
+      const stats = obs.getStats();
+      expect(stats.sent).toBe(0);
+      expect(stats.transportErrors).toBe(1);
+      obs.destroy();
+    });
+
+    it('should increment stats.sent on successful sync transport', () => {
+      const transport: Transport = { send: () => {} };
+
+      const obs = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+      });
+
+      const observer = getGlobalObserver()!;
+      observer({
+        type: 'transition',
+        machineId: 'm',
+        from: 'a',
+        to: 'b',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+      observer({
+        type: 'transition',
+        machineId: 'm',
+        from: 'b',
+        to: 'c',
+        event: 'NEXT',
+        timestamp: Date.now(),
+      });
+
+      obs.flush();
+
+      expect(obs.getStats().sent).toBe(2);
+      obs.destroy();
+    });
+  });
 });

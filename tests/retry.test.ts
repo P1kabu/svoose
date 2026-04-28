@@ -188,7 +188,7 @@ describe('createFetchTransport with retry', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('should call onError after all retries exhausted', async () => {
+  it('should call onError and re-throw after all retries exhausted', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('network error'));
     vi.stubGlobal('fetch', fetchMock);
     const onError = vi.fn();
@@ -199,8 +199,10 @@ describe('createFetchTransport with retry', () => {
     });
 
     const promise = transport.send([{ type: 'vital', name: 'CLS', value: 0, rating: 'good', delta: 0, timestamp: Date.now(), url: '' }]);
+    // Suppress unhandled rejection — we re-throw on top of onError now
+    promise.catch(() => {});
     await vi.advanceTimersByTimeAsync(100);
-    await promise;
+    await expect(promise).rejects.toThrow('network error');
 
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));

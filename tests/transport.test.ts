@@ -116,25 +116,40 @@ describe('createFetchTransport', () => {
     });
   });
 
-  it('should call onError when fetch fails', async () => {
+  it('should call onError and re-throw when fetch fails', async () => {
     const onError = vi.fn();
     mockFetch.mockRejectedValue(new Error('Network error'));
 
     const transport = createFetchTransport('/api/metrics', { onError });
+    const event: VitalEvent = {
+      type: 'vital',
+      name: 'CLS',
+      value: 0.1,
+      rating: 'good',
+      delta: 0.1,
+      timestamp: Date.now(),
+      url: 'https://example.com',
+    };
 
-    await transport.send([
-      {
-        type: 'vital',
-        name: 'CLS',
-        value: 0.1,
-        rating: 'good',
-        delta: 0.1,
-        timestamp: Date.now(),
-        url: 'https://example.com',
-      },
-    ]);
-
+    await expect(transport.send([event])).rejects.toThrow('Network error');
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('should reject (not swallow) when fetch fails without onError', async () => {
+    mockFetch.mockRejectedValue(new Error('Network error'));
+
+    const transport = createFetchTransport('/api/metrics');
+    const event: VitalEvent = {
+      type: 'vital',
+      name: 'CLS',
+      value: 0.1,
+      rating: 'good',
+      delta: 0.1,
+      timestamp: Date.now(),
+      url: 'https://example.com',
+    };
+
+    await expect(transport.send([event])).rejects.toThrow('Network error');
   });
 });
 

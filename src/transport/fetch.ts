@@ -48,7 +48,10 @@ export function createFetchTransport(
           await doFetch();
         }
       } catch (error) {
+        // Notify local listener if provided, then re-throw so observe()
+        // can update transportErrors and call ObserveOptions.onError.
         options.onError?.(error as Error);
+        throw error;
       }
     },
   };

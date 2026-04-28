@@ -76,6 +76,16 @@ export type {
 export { metric, counter, gauge, histogram, createTypedMetric } from './metrics/index.js';
 
 // ============================================
+// Privacy / PII
+// ============================================
+export { configurePII } from './observe/index.js';
+
+// ============================================
+// Error Fingerprinting
+// ============================================
+export { fingerprint, simpleHash } from './observe/index.js';
+
+// ============================================
 // Shared Types
 // ============================================
 export type {
@@ -83,4 +93,9 @@ export type {
   TransitionEvent,
   CustomMetricEvent,
   ObserveEvent,
+  PIIConfig,
+  PrivacyOptions,
+  UrlScrubPattern,
+  ErrorTrackingConfig,
+  ErrorsOption,
 } from './types/index.js';

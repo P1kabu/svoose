@@ -13,3 +13,21 @@ export type { SamplingConfig, SamplingOption, SamplingEventType, Sampler } from 
 export { productionDefaults } from './presets.js';
 export { createSessionManager } from './session.js';
 export type { SessionConfig, SessionOption, SessionManager } from './session.js';
+export {
+  configurePII,
+  getPIIConfig,
+  sanitizeEvent,
+  scrubUrl,
+  maskValue,
+  stripQueryParams,
+  stripHash,
+  isExcludedPath,
+  deepClone,
+} from './privacy.js';
+export {
+  fingerprint,
+  simpleHash,
+  extractFunctionName,
+  createDedupTracker,
+} from './fingerprint.js';
+export type { DedupTracker } from './fingerprint.js';
