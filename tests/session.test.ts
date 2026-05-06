@@ -274,4 +274,36 @@ describe('Session Tracking', () => {
       expect(localStorage.getItem('svoose_session')).toBeNull();
     });
   });
+
+  describe('storage quota exceeded', () => {
+    it('keeps issuing session IDs in-memory when localStorage.setItem throws', () => {
+      // Spy on the *prototype* setItem so the storage write inside save()
+      // throws QuotaExceededError. The probe in getStorage() runs first and
+      // also fails — manager falls back to memory transparently.
+      const setSpy = vi
+        .spyOn(Storage.prototype, 'setItem')
+        .mockImplementation(() => {
+          const err: any = new Error('QuotaExceededError');
+          err.name = 'QuotaExceededError';
+          throw err;
+        });
+
+      const manager = createSessionManager({
+        timeout: 30 * 60 * 1000,
+        storage: 'localStorage',
+      });
+      expect(manager).not.toBeNull();
+
+      const id1 = manager!.getSessionId();
+      expect(typeof id1).toBe('string');
+      expect(id1.length).toBeGreaterThan(10);
+
+      // Subsequent calls within timeout return the same in-memory session
+      const id2 = manager!.getSessionId();
+      expect(id2).toBe(id1);
+
+      manager!.destroy();
+      setSpy.mockRestore();
+    });
+  });
 });

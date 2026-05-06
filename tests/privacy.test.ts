@@ -11,7 +11,7 @@ import {
   deepClone,
 } from '../src/observe/privacy.js';
 import { observe, setGlobalObserver, getGlobalObserver } from '../src/observe/observe.svelte.js';
-import type { ObserveEvent, Transport, VitalEvent, CustomMetricEvent } from '../src/types/index.js';
+import type { ObserveEvent, Transport, VitalEvent, CustomMetricEvent, PIIConfig } from '../src/types/index.js';
 
 class MockPerformanceObserver {
   observe() {}
@@ -43,6 +43,11 @@ describe('scrubUrl', () => {
   it('should handle relative URLs', () => {
     const out = scrubUrl('/api?api_key=zzz&page=1', ['api_key']);
     expect(out).toBe('/api?api_key=%5BREDACTED%5D&page=1');
+  });
+
+  it('should preserve path-relative URLs without inserting a leading slash (Bug #2)', () => {
+    const out = scrubUrl('foo?token=abc&safe=ok', ['token']);
+    expect(out).toBe('foo?token=%5BREDACTED%5D&safe=ok');
   });
 
   it('should leave URL untouched when no params match', () => {
@@ -218,6 +223,36 @@ describe('sanitizeEvent', () => {
     const out = sanitizeEvent(baseVital, null) as VitalEvent;
     expect(out.url).not.toContain('?');
   });
+
+  it('should DROP event when sanitize() throws (Bug #5)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const out = sanitizeEvent(baseVital, {
+      sanitize: () => {
+        throw new Error('user bug');
+      },
+    });
+    expect(out).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('privacy.sanitize threw'),
+      expect.any(Error),
+    );
+    warn.mockRestore();
+  });
+
+  it('should keep pipeline alive after sanitize() throws (Bug #5)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cfg: PIIConfig = {
+      sanitize: (e) => {
+        if ((e as VitalEvent).name === 'LCP') throw new Error('user bug');
+        return e;
+      },
+    };
+    // First call throws → null. Second call (different event) still works.
+    expect(sanitizeEvent(baseVital, cfg)).toBeNull();
+    const ok = sanitizeEvent({ ...baseVital, name: 'CLS' }, cfg) as VitalEvent;
+    expect(ok.name).toBe('CLS');
+    warn.mockRestore();
+  });
 });
 
 describe('deepClone', () => {
@@ -306,5 +341,40 @@ describe('observe() integration with privacy', () => {
     expect(filterSawSecret).toBe(false); // privacy dropped before filter saw it
     expect(sent.flat()).toHaveLength(0);
     obs.destroy();
+  });
+
+  it('should keep observe() pipeline alive when sanitize() throws (Bug #5)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sent: ObserveEvent[][] = [];
+    const transport: Transport = { send: (e) => { sent.push([...e]); } };
+
+    const obs = observe({
+      transport,
+      vitals: false,
+      errors: false,
+      batchSize: 100,
+      privacy: {
+        sanitize: (e) => {
+          if ('message' in e && (e as { message: string }).message === 'bad') {
+            throw new Error('sanitize blew up');
+          }
+          return e;
+        },
+      },
+    });
+
+    const observer = getGlobalObserver()!;
+    // First event throws → dropped, but pipeline must keep working
+    observer({ type: 'error', message: 'bad', timestamp: 1, url: '/' });
+    // Second event passes through normally
+    observer({ type: 'error', message: 'ok', timestamp: 2, url: '/' });
+
+    obs.flush();
+    const flat = sent.flat();
+    expect(flat).toHaveLength(1);
+    expect((flat[0] as { message: string }).message).toBe('ok');
+    expect(obs.getStats().dropped).toBe(1);
+    obs.destroy();
+    warn.mockRestore();
   });
 });

@@ -90,7 +90,13 @@ export function scrubUrl(url: string, patterns: ReadonlyArray<string | RegExp>):
   if (!mutated) return url;
 
   if (isRelative) {
-    const path = parsed.pathname + (parsed.search || '') + (parsed.hash || '');
+    let path = parsed.pathname + (parsed.search || '') + (parsed.hash || '');
+    // Bug #2: synthetic base always yields a leading '/' in pathname.
+    // Preserve original input shape — if user passed a path-relative URL
+    // (no leading '/'), strip the synthetic one back out.
+    if (!url.startsWith('/') && path.startsWith('/')) {
+      path = path.slice(1);
+    }
     return path;
   }
   return parsed.toString();
@@ -231,11 +237,20 @@ export function sanitizeEvent(
     maskRecord(target.metadata, cfg.maskFields);
   }
 
-  // 6. Custom sanitize — last
+  // 6. Custom sanitize — last. Wrapped in try/catch so a buggy user callback
+  // can't bring down the whole observe pipeline (vitals, errors, machines).
+  // On throw: drop the event + warn in dev. Safer-default than re-throw.
   if (cfg.sanitize) {
-    const result = cfg.sanitize(cloned);
-    if (result === null) return null;
-    return result;
+    try {
+      const result = cfg.sanitize(cloned);
+      if (result === null) return null;
+      return result;
+    } catch (err) {
+      if (typeof console !== 'undefined') {
+        console.warn('[svoose] privacy.sanitize threw — dropping event:', err);
+      }
+      return null;
+    }
   }
 
   return cloned;

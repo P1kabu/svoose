@@ -2,7 +2,7 @@
 
 > Svelte + Goose = **svoose** — the goose that sees everything
 
-Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **~6.7KB gzipped** (observe-only ~5.1KB).
+Lightweight observability + state machines for Svelte 5. Zero dependencies. Tree-shakeable. **~8.5KB gzipped** (observe-only ~6.7KB).
 
 ## Features
 
@@ -169,16 +169,16 @@ Every event svoose sends is JSON you can inspect with `createConsoleTransport()`
 | `sessionId` | Random generated ID | No (not tied to user identity) |
 | `name`, `value`, `metadata` | Your `metric()` / `counter()` calls | Depends on what you pass |
 
-> **Tip**: Use a `filter` to strip sensitive data before it's sent:
+> **Tip**: To strip PII (URL params, email, phone, etc.) use the built-in [Privacy & PII Sanitization](#privacy--pii-sanitization) config. Use `filter` only for content-based drop decisions:
 > ```typescript
 > observe({
 >   endpoint: '/api/metrics',
->   filter: (event) => {
->     if ('url' in event) {
->       (event as any).url = event.url.split('?')[0]; // strip query params
->     }
->     return true;
+>   privacy: {
+>     stripQueryParams: true,           // drop ?token=xxx
+>     scrubFromUrl: ['session_id'],     // or replace specific params
+>     maskFields: ['email', 'phone'],   // mask metadata fields
 >   },
+>   filter: (event) => event.type !== 'transition', // drop by type
 > });
 > ```
 
@@ -188,7 +188,7 @@ svoose is a **client-side collector** — it doesn't include a backend. Your ser
 
 ### SvelteKit
 
-> Planned for v0.3.0 — not yet implemented. The API below is a preview of the planned integration.
+A standard `+server.ts` POST handler works today — svoose only needs an endpoint that accepts a JSON array:
 
 ```typescript
 // src/routes/api/metrics/+server.ts
@@ -207,6 +207,8 @@ export const POST: RequestHandler = async ({ request }) => {
   return json({ ok: true }, { status: 200 });
 };
 ```
+
+> **Coming in v0.3.0**: a `svoose/sveltekit` adapter with `hooks.client.ts` integration, `afterNavigate` tracking, and `wrapLoad()` for server-side spans. The endpoint above continues to work as-is.
 
 ### Express
 
@@ -328,6 +330,51 @@ cleanup();
 > **Note**: If neither `endpoint` nor `transport` is provided, defaults to `endpoint: '/api/metrics'`.
 > The default transport is hybrid (fetch + beacon on page close) for reliable delivery.
 
+> ⚠️ **Run only one `observe()` instance at a time.** Calling `observe()` while
+> another is active replaces the global emitter — `metric()` calls between
+> destroy and recreate will be queued and attributed to the new session. In dev,
+> svoose warns when an active emitter is torn down. HMR-friendly: call
+> `obs.destroy()` before recreating.
+
+#### `obs.getStats()` — what each field means
+
+| Field             | Meaning                                                       |
+|-------------------|---------------------------------------------------------------|
+| `buffered`        | Total events accepted into the pipeline (cumulative)          |
+| `sent`            | Events successfully delivered by the transport                |
+| `dropped`         | Events filtered, sampled, sanitized, or deduped away          |
+| `lastSendTime`    | Timestamp (ms) of the last send attempt — `0` if never sent   |
+| `transportErrors` | Count of `transport.send()` failures (sync throws + rejects)  |
+
+#### Filtering events by type
+
+`event.type === 'histogram'` doesn't work — histograms (and counters / gauges) all share `type: 'custom'` and differ by `metricKind`. Use the type guards instead — they narrow correctly for TypeScript:
+
+```typescript
+import { observe, isHistogram, isError, isVital } from 'svoose';
+
+const obs = observe({ endpoint: '/api/metrics' });
+
+obs.onEvent((event) => {
+  if (isHistogram(event)) {
+    // event: CustomMetricEvent & { metricKind: 'histogram' }
+    console.log(event.value, event.metadata);
+  }
+  if (isError(event)) {
+    // event: ErrorEvent
+    console.warn(event.fingerprint, event.message);
+  }
+  if (isVital(event)) {
+    // event: VitalEvent
+    if (event.rating === 'poor') alert(`${event.name} is poor: ${event.value}`);
+  }
+});
+```
+
+Available guards: `isVital`, `isError`, `isUnhandledRejection`, `isTransition`, `isCustom`, `isHistogram`, `isCounter`, `isGauge`, `isTrack`.
+
+> The `filter` option is for **content-based decisions** (drop noisy events). For PII scrubbing, use the [Privacy section](#privacy--pii-sanitization) instead — `filter` runs after sampling and won't help if PII has already been streamed downstream.
+
 #### Sampling
 
 Control what percentage of events are sent:
@@ -419,6 +466,8 @@ histogram('payload_size', 4096, { route: '/api/data' });
 ```
 
 **Buffer behavior**: If `metric()` / `counter()` / `gauge()` / `histogram()` is called before `observe()`, events are buffered (max 100). They're automatically flushed when `observe()` initializes.
+
+> **Metadata must be JSON-serializable.** For Svelte 5 `$state` proxies pass `$state.snapshot(value)`; for Vue refs use `.value` or `toRaw()`. In dev, svoose throws a clear error at the call site if `metadata` cannot be serialized — this prevents silently losing the entire batch later in `transport.send()`.
 
 ##### Typed Metrics
 
@@ -769,7 +818,7 @@ observe({
 });
 ```
 
-Within the window, repeats of the same fingerprint are dropped (`stats.dropped++`). After the window, the next occurrence passes again.
+Within the window, repeats of the same fingerprint are dropped (`stats.dropped++`). The window timestamp is **refreshed on every hit**, so a continuous burst of the same error stays suppressed until the source actually goes quiet for `dedupeWindow` milliseconds — only then does the next occurrence pass again.
 
 ## Svelte 5 Usage
 
@@ -894,9 +943,9 @@ Tree-shakeable — pay only for what you use:
 
 | Import | Size (gzip) |
 |--------|-------------|
-| `observe()` + vitals + errors + metrics | ~5.1 KB |
+| `observe()` + vitals + errors + metrics + privacy | ~6.7 KB |
 | `createMachine()` only | ~0.95 KB |
-| Full bundle | ~6.7 KB |
+| Full bundle | ~8.5 KB |
 
 > Compare: Sentry ~20KB, PostHog ~40KB.
 
@@ -910,11 +959,12 @@ svoose is best for: lightweight self-hosted observability where you control the 
 
 ## Roadmap
 
-- **v0.1.3–v0.1.10** — Done (sampling, sessions, custom metrics, beacon/hybrid transport, API cleanup, retry logic)
-
-- **v0.1.11** — Privacy Utilities (planned)
-- **v0.2.0** — Production-Ready: User ID, Offline, flush API, Rate Limiter (planned)
-- **v0.3.0** — SvelteKit Integration (planned)
+- **v0.1.3–v0.1.12** — Released (sampling, sessions, custom metrics, beacon/hybrid transport, API cleanup, retry, DX foundation, privacy + error fingerprinting, type guards + 8 audit bug fixes)
+- **v0.1.13** — Identity (`identify()`) + `NavigationEvent` type stub (planned)
+- **v0.1.14** — Production Hardening: rate limiter (`maxEventsPerSecond`) + offline queue (planned)
+- **v0.1.15** — `createMachine` TypeScript inference fix (planned)
+- **v0.2.0** — Dev Overlay (`svoose/devtools`) + OTLP/Loki/Multi transport adapters + Grafana template (planned)
+- **v0.3.0** — SvelteKit Integration (`hooks.client`, `afterNavigate`) (planned)
 - **v1.0.0** — Stable Release
 
 > FSM is a lightweight bonus feature, not an XState competitor. For complex state machines, use XState.

@@ -35,8 +35,9 @@ export function extractFunctionName(stack?: string): string {
     if (!match) continue;
 
     const name = match[1];
-    if (name.length <= 1) continue;          // minified single-letter
-    if (name.includes('/') || name.includes('\\')) continue; // looks like a path
+    if (name.length <= 1) continue;                          // minified single-letter
+    if (name.includes('://')) continue;                      // URL fragment in stack frame
+    if (name.startsWith('/') || name.startsWith('\\')) continue; // absolute path
     return name;
   }
   return '';

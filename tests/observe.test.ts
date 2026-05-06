@@ -1224,4 +1224,190 @@ describe('observe', () => {
       obs.destroy();
     });
   });
+
+  describe('concurrent observe() instances (Bug #4)', () => {
+    it('second observe() replaces global emitter', () => {
+      const sentA: ObserveEvent[] = [];
+      const sentB: ObserveEvent[] = [];
+
+      const obsA = observe({
+        transport: { send: (e) => { sentA.push(...e); } },
+        vitals: false, errors: false, batchSize: 100,
+      });
+      const obsB = observe({
+        transport: { send: (e) => { sentB.push(...e); } },
+        vitals: false, errors: false, batchSize: 100,
+      });
+
+      // Active observer should be obsB's bufferEvent
+      const observer = getGlobalObserver()!;
+      observer({ type: 'error', message: 'hello', timestamp: 1, url: '/' });
+      obsA.flush();
+      obsB.flush();
+
+      expect(sentA).toHaveLength(0);
+      expect(sentB).toHaveLength(1);
+      obsA.destroy();
+      obsB.destroy();
+    });
+
+    it('first instance destroy() does not clear second instance emitter', () => {
+      const sentA: ObserveEvent[] = [];
+      const sentB: ObserveEvent[] = [];
+
+      const obsA = observe({
+        transport: { send: (e) => { sentA.push(...e); } },
+        vitals: false, errors: false, batchSize: 100,
+      });
+      const obsB = observe({
+        transport: { send: (e) => { sentB.push(...e); } },
+        vitals: false, errors: false, batchSize: 100,
+      });
+
+      // Destroying A should NOT null the global emitter — B is still active
+      obsA.destroy();
+      expect(getGlobalObserver()).not.toBeNull();
+
+      const observer = getGlobalObserver()!;
+      observer({ type: 'error', message: 'still alive', timestamp: 2, url: '/' });
+      obsB.flush();
+      expect(sentB).toHaveLength(1);
+      obsB.destroy();
+    });
+
+    it('destroy in reverse order leaves global emitter null', () => {
+      const obsA = observe({ vitals: false, errors: false, batchSize: 100 });
+      const obsB = observe({ vitals: false, errors: false, batchSize: 100 });
+
+      obsB.destroy();
+      obsA.destroy();
+      // After both gone, no global observer should remain
+      expect(getGlobalObserver()).toBeNull();
+    });
+
+    it('warns in dev when active emitter is torn down (Bug #4)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const obs = observe({ vitals: false, errors: false, batchSize: 100 });
+      obs.destroy();
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('observe() torn down'),
+      );
+      warn.mockRestore();
+    });
+
+    it('metric() between destroy and next observe() is flushed to the new instance (Bug #4 verification)', async () => {
+      const sentB: ObserveEvent[] = [];
+
+      // First observe + destroy. Now there is no active emitter.
+      const obsA = observe({ vitals: false, errors: false, batchSize: 100 });
+      obsA.destroy();
+
+      // Avoid the pendingEvents cap noise — single call is enough.
+      const { metric, _clearPendingEvents } = await import('../src/metrics/metric.js');
+      _clearPendingEvents();
+
+      // Call metric() while no observer is active — buffered into pendingEvents.
+      metric('between_instances', { gap: true });
+
+      // Second observe() picks up the buffered event on emitter wire-up.
+      const obsB = observe({
+        transport: { send: (e) => { sentB.push(...e); } },
+        vitals: false, errors: false, batchSize: 100,
+      });
+      obsB.flush();
+
+      expect(sentB).toHaveLength(1);
+      expect((sentB[0] as any).name).toBe('between_instances');
+      obsB.destroy();
+    });
+  });
+
+  describe('destroyed-flag guards async transport (Bug #3)', () => {
+    it('does not mutate stats when async send resolves AFTER destroy()', async () => {
+      let resolveFn: (() => void) | null = null;
+      const slowTransport: Transport = {
+        send: () =>
+          new Promise<void>((resolve) => {
+            resolveFn = resolve;
+          }),
+      };
+
+      const obs = observe({
+        transport: slowTransport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+      });
+
+      const observer = getGlobalObserver()!;
+      observer({ type: 'error', message: 'a', timestamp: 1, url: '/' });
+      obs.flush(); // kicks off send() — promise still pending
+
+      const before = obs.getStats().sent;
+      obs.destroy(); // final flush is no-op (buffer empty), then destroyed = true
+
+      // Now resolve the in-flight promise — destroyed-guard must skip stats.sent++
+      resolveFn?.();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(obs.getStats().sent).toBe(before);
+    });
+
+    it('does not call onError when async send rejects AFTER destroy()', async () => {
+      let rejectFn: ((err: Error) => void) | null = null;
+      const slowTransport: Transport = {
+        send: () =>
+          new Promise<void>((_, reject) => {
+            rejectFn = reject;
+          }),
+      };
+
+      const onError = vi.fn();
+      const obs = observe({
+        transport: slowTransport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+        onError,
+      });
+
+      const observer = getGlobalObserver()!;
+      observer({ type: 'error', message: 'a', timestamp: 1, url: '/' });
+      obs.flush();
+
+      obs.destroy();
+
+      rejectFn?.(new Error('post-destroy'));
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(obs.getStats().transportErrors).toBe(0);
+      // destroyed-flag also blocks dropped++ accounting
+      expect(obs.getStats().dropped).toBe(0);
+    });
+
+    it('still updates stats when async send resolves BEFORE destroy()', async () => {
+      const transport: Transport = {
+        send: () => Promise.resolve(),
+      };
+
+      const obs = observe({
+        transport,
+        vitals: false,
+        errors: false,
+        batchSize: 100,
+      });
+
+      const observer = getGlobalObserver()!;
+      observer({ type: 'error', message: 'a', timestamp: 1, url: '/' });
+      obs.flush();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(obs.getStats().sent).toBe(1);
+      obs.destroy();
+    });
+  });
 });

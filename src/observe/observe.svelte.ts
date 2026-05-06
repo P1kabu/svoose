@@ -143,6 +143,10 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
   }
   const buffer: ObserveEvent[] = [];
   let flushTimer: ReturnType<typeof setInterval> | null = null;
+  // Set inside destroy() *before* sync cleanup runs. Async transport.send()
+  // results that resolve / reject after destroy() must not mutate stats or
+  // call onError — by then the user already considers this instance dead.
+  let destroyed = false;
 
   // Stats tracking
   const stats: ObserveStats = { buffered: 0, sent: 0, dropped: 0, lastSendTime: 0, transportErrors: 0 };
@@ -258,14 +262,27 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
       const result = transport.send(events);
       if (result && typeof result.then === 'function') {
         result.then(
-          () => { stats.sent += events.length; },
-          (err) => handleError(err),
+          () => {
+            // Bug #3: ignore async resolutions that arrive after destroy().
+            if (destroyed) return;
+            stats.sent += events.length;
+          },
+          (err) => {
+            if (destroyed) return;
+            // Bug #7: events were splice()'d out of buffer and the transport
+            // refused them — count them as dropped so getStats() reflects the
+            // real loss, not just the failure count.
+            stats.dropped += events.length;
+            handleError(err);
+          },
         );
       } else {
         // Sync transport succeeded
         stats.sent += events.length;
       }
     } catch (err) {
+      // Sync throw from transport.send() — same loss accounting as async reject.
+      stats.dropped += events.length;
       handleError(err);
     }
   };
@@ -358,7 +375,12 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
 
   // Destroy function
   const destroy = (): void => {
+    if (destroyed) return;
+    // Final flush BEFORE flipping the flag so any sync transport still updates
+    // stats; only async resolutions (which land after destroy() returns) are
+    // suppressed by the destroyed-guard inside flush().
     flush();
+    destroyed = true;
     cleanups.forEach((fn) => fn());
     eventListeners.clear();
     // Destroy transport if it has a destroy method (e.g. HybridTransport)

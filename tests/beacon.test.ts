@@ -90,13 +90,14 @@ describe('createBeaconTransport', () => {
     errorSpy.mockRestore();
   });
 
-  it('should call onError when sendBeacon fails', () => {
+  it('should call onError AND throw when sendBeacon fails (Bug #7)', () => {
     mockSendBeacon.mockReturnValue(false);
     const onError = vi.fn();
     const transport = createBeaconTransport('/api/events', { onError });
 
-    transport.send([makeEvent()]);
-
+    // Bug #7: throws so observe.flush() can route through its onError /
+    // transport-error stats path (sendBeacon=false used to be silent loss).
+    expect(() => transport.send([makeEvent()])).toThrow(/sendBeacon rejected/);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
@@ -108,5 +109,38 @@ describe('createBeaconTransport', () => {
     // Should not throw
     expect(() => transport.send([makeEvent()])).not.toThrow();
     expect(mockSendBeacon).not.toHaveBeenCalled();
+  });
+
+  it('observe() routes sendBeacon=false throw through transportErrors + onError (Bug #7)', async () => {
+    // Need PerformanceObserver mock for observe() under jsdom
+    class MockPO {
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('PerformanceObserver', MockPO);
+    Object.defineProperty(MockPO, 'supportedEntryTypes', { value: [], writable: true });
+
+    mockSendBeacon.mockReturnValue(false);
+    const beacon = createBeaconTransport('/api/events');
+
+    const { observe, getGlobalObserver } = await import('../src/observe/observe.svelte.js');
+    const obsOnError = vi.fn();
+    const obs = observe({
+      transport: beacon,
+      vitals: false,
+      errors: false,
+      batchSize: 100,
+      onError: obsOnError,
+    });
+
+    const observer = getGlobalObserver()!;
+    observer({ type: 'error', message: 'lost', timestamp: 1, url: '/' });
+    obs.flush();
+
+    expect(obsOnError).toHaveBeenCalledWith(expect.any(Error));
+    expect(obs.getStats().transportErrors).toBe(1);
+    // Events were splice()'d from buffer and rejected — count as dropped.
+    expect(obs.getStats().dropped).toBe(1);
+    obs.destroy();
   });
 });

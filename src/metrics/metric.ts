@@ -22,6 +22,18 @@ const pendingEvents: CustomMetricEvent[] = [];
  * @param emit - The emit function from observe(), or null to disconnect
  */
 export function setMetricEmitter(emit: ((event: ObserveEvent) => void) | null): void {
+  // Bug #4: warn (dev-only) when an active emitter is being torn down. metric()
+  // calls between destroy() and the next observe() get queued in pendingEvents
+  // and attributed to the *next* instance's session. The library only supports
+  // one observe() instance at a time.
+  if (emit === null && emitter !== null && isDev()) {
+    console.warn(
+      '[svoose] observe() torn down — any metric() calls before the next ' +
+      'observe() will be queued and attributed to that future session. ' +
+      'Run only one observe() instance at a time (HMR-friendly: destroy first).'
+    );
+  }
+
   emitter = emit;
 
   // Flush pending events when emitter is set
@@ -65,6 +77,21 @@ export function metric(name: string, metadata: Record<string, unknown> = {}): vo
  * Internal helper to emit or buffer a CustomMetricEvent
  */
 function emitEvent(event: CustomMetricEvent): void {
+  // Dev-only fail-fast: surface non-serializable metadata at the call site
+  // instead of losing the entire batch later in transport.send().
+  // Common offender: passing a Svelte 5 $state proxy or Vue ref directly.
+  if (isDev() && event.metadata) {
+    try {
+      JSON.stringify(event.metadata);
+    } catch (err) {
+      throw new Error(
+        `[svoose] metric('${event.name}') metadata is not JSON-serializable. ` +
+        `For Svelte 5 $state, pass $state.snapshot(value); for Vue refs, use .value or toRaw(). ` +
+        `Original: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
   if (emitter) {
     emitter(event);
   } else {

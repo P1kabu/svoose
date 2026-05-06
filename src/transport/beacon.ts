@@ -50,7 +50,14 @@ export function createBeaconTransport(
     const success = navigator.sendBeacon(endpoint, blob);
 
     if (!success) {
-      options.onError?.(new Error('sendBeacon failed'));
+      // Bug #7: sendBeacon returns false on browser quota / queue overflow,
+      // typically during unload. Tap local onError for backward compat, then
+      // *throw* so observe.flush() can route through its onError + transport
+      // error stats path. Otherwise events are silently lost.
+      // v0.1.14 will re-enqueue these into the offline buffer instead.
+      const err = new Error('sendBeacon rejected (likely browser quota during unload)');
+      options.onError?.(err);
+      throw err;
     }
   }
 

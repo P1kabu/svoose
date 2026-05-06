@@ -53,13 +53,16 @@ export function createMachine<
   let _state: TState = config.initial;
   let _context: TContext = config.context ? { ...config.context } : ({} as TContext);
 
-  // Parse observe config
+  // Parse observe config.
+  // Object form defaults `transitions: true` — passing an object is an explicit
+  // opt-in to observability, so silently no-op'ing on `{ context: true }` would
+  // be a footgun. Caller can still set `transitions: false` to opt out.
   const observeConfig =
     config.observe === true
       ? { transitions: true, context: false }
       : config.observe === false || config.observe === undefined
         ? { transitions: false, context: false }
-        : config.observe;
+        : { transitions: true, context: false, ...config.observe };
 
   // Register for error context tracking
   registerMachineContext(config.id, () => _state);

@@ -22,6 +22,8 @@ describe('createHybridTransport', () => {
 
   beforeEach(() => {
     addedListeners = {};
+    mockFetch.mockResolvedValue({ ok: true });
+    mockSendBeacon.mockReturnValue(true);
     vi.stubGlobal('fetch', mockFetch);
     vi.stubGlobal('navigator', { sendBeacon: mockSendBeacon });
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMachine, createEvent } from '../src/machine/index.js';
+import { setGlobalObserver } from '../src/observe/observe.svelte.js';
 
 describe('createMachine', () => {
   describe('basic functionality', () => {
@@ -770,5 +771,103 @@ describe('edge cases and error handling', () => {
 
     machine.destroy();
     errorSpy.mockRestore();
+  });
+});
+
+describe('createMachine observe option (Bug #8)', () => {
+  it('object form defaults transitions: true (observe: { context: true })', () => {
+    const events: any[] = [];
+    setGlobalObserver((e) => events.push(e));
+
+    const machine = createMachine({
+      id: 'm1',
+      initial: 'a',
+      context: { count: 0 },
+      states: {
+        a: {
+          on: { NEXT: { target: 'b', action: () => ({ count: 1 }) } },
+        },
+        b: {},
+      },
+      observe: { context: true },
+    });
+
+    machine.send('NEXT');
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: 'transition',
+      machineId: 'm1',
+      from: 'a',
+      to: 'b',
+      context: { count: 1 },
+    });
+
+    machine.destroy();
+    setGlobalObserver(null);
+  });
+
+  it('object form respects explicit transitions: false (silent opt-out)', () => {
+    const events: any[] = [];
+    setGlobalObserver((e) => events.push(e));
+
+    const machine = createMachine({
+      id: 'm2',
+      initial: 'a',
+      states: {
+        a: { on: { NEXT: 'b' } },
+        b: {},
+      },
+      observe: { transitions: false, context: true },
+    });
+
+    machine.send('NEXT');
+    expect(events).toHaveLength(0);
+
+    machine.destroy();
+    setGlobalObserver(null);
+  });
+
+  it('boolean form unchanged: observe: true → transitions=true, context=false', () => {
+    const events: any[] = [];
+    setGlobalObserver((e) => events.push(e));
+
+    const machine = createMachine({
+      id: 'm3',
+      initial: 'a',
+      context: { secret: 'shh' },
+      states: {
+        a: { on: { NEXT: 'b' } },
+        b: {},
+      },
+      observe: true,
+    });
+
+    machine.send('NEXT');
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'transition', from: 'a', to: 'b' });
+    expect(events[0]).not.toHaveProperty('context');
+
+    machine.destroy();
+    setGlobalObserver(null);
+  });
+
+  it('observe omitted → no events emitted', () => {
+    const events: any[] = [];
+    setGlobalObserver((e) => events.push(e));
+
+    const machine = createMachine({
+      id: 'm4',
+      initial: 'a',
+      states: {
+        a: { on: { NEXT: 'b' } },
+        b: {},
+      },
+    });
+
+    machine.send('NEXT');
+    expect(events).toHaveLength(0);
+
+    machine.destroy();
+    setGlobalObserver(null);
   });
 });

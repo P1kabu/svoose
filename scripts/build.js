@@ -42,6 +42,7 @@ const regularEntryPoints = [
   'src/observe/presets.ts',
   'src/observe/privacy.ts',
   'src/observe/fingerprint.ts',
+  'src/observe/guards.ts',
   'src/metrics/index.ts',
   'src/metrics/metric.ts',
   'src/metrics/typed.ts',

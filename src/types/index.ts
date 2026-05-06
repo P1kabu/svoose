@@ -15,10 +15,23 @@ export interface Metric {
 }
 
 // ============================================
+// Base Event (shared by all ObserveEvent variants)
+// ============================================
+
+/**
+ * Index signature applied to every event variant so consumers can cast events
+ * to `Record<string, unknown>` for generic logging/serialization without
+ * `as unknown as` gymnastics.
+ */
+export interface BaseObserveEvent {
+  [key: string]: unknown;
+}
+
+// ============================================
 // Error Types
 // ============================================
 
-export interface ErrorEvent {
+export interface ErrorEvent extends BaseObserveEvent {
   type: 'error';
   message: string;
   stack?: string;
@@ -35,7 +48,7 @@ export interface ErrorEvent {
   fingerprint?: string;
 }
 
-export interface UnhandledRejectionEvent {
+export interface UnhandledRejectionEvent extends BaseObserveEvent {
   type: 'unhandled-rejection';
   reason: string;
   stack?: string;
@@ -55,7 +68,7 @@ export type ObserveErrorEvent = ErrorEvent | UnhandledRejectionEvent;
 // Vital Event
 // ============================================
 
-export interface VitalEvent {
+export interface VitalEvent extends BaseObserveEvent {
   type: 'vital';
   name: MetricName;
   value: number;
@@ -70,7 +83,7 @@ export interface VitalEvent {
 // Transition Event (for state machines)
 // ============================================
 
-export interface TransitionEvent {
+export interface TransitionEvent extends BaseObserveEvent {
   type: 'transition';
   machineId: string;
   from: string;
@@ -85,7 +98,7 @@ export interface TransitionEvent {
 // Custom Metric Event
 // ============================================
 
-export interface CustomMetricEvent {
+export interface CustomMetricEvent extends BaseObserveEvent {
   type: 'custom';
   name: string;
   metricKind?: 'counter' | 'gauge' | 'histogram';

@@ -1,6 +1,6 @@
 {
   "name": "svoose",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Observability + State Machines for Svelte 5 — the goose that sees everything",
   "type": "module",
   "main": "./dist/index.js",

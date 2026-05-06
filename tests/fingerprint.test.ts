@@ -62,6 +62,21 @@ describe('extractFunctionName', () => {
     expect(extractFunctionName(stack)).toBe('Object.real');
   });
 
+  it('should skip frames whose function token contains a URL', () => {
+    const stack = `Error: x
+    at https://cdn.example.com/app.js:1:1 (file.js:1:1)
+    at Object.real (chunk.js:2:2)`;
+    expect(extractFunctionName(stack)).toBe('Object.real');
+  });
+
+  it('should accept module-qualified names containing a slash (Bug #1)', () => {
+    // Names like `module/internal.fn` were skipped pre-v0.1.12 because of a
+    // blanket includes('/') check. They should be accepted now.
+    const stack = `Error: x
+    at module/internal.fn (chunk-abc.js:3:22)`;
+    expect(extractFunctionName(stack)).toBe('module/internal.fn');
+  });
+
   it('should return empty string when stack has only anonymous frames', () => {
     const stack = `Error: x
     at app-Bx7k2.js:1:43567
@@ -167,6 +182,20 @@ describe('createDedupTracker', () => {
     t.clear();
     expect(t.size()).toBe(0);
     expect(t.seen('a', 100)).toBe(false);
+  });
+
+  it('sustained burst of the same fingerprint stays bounded (no map growth)', () => {
+    // Continuous repeats of the same fp should keep returning true (silenced)
+    // and the map size must remain at 1 — verifies eviction logic doesn't leak
+    // under the worst case (refresh-on-hit + same key forever).
+    const t = createDedupTracker(60_000);
+    let now = 0;
+    expect(t.seen('boom', now)).toBe(false);
+    for (let i = 0; i < 5000; i++) {
+      now += 100;
+      expect(t.seen('boom', now)).toBe(true);
+    }
+    expect(t.size()).toBe(1);
   });
 });
 

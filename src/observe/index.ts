@@ -31,3 +31,14 @@ export {
   createDedupTracker,
 } from './fingerprint.js';
 export type { DedupTracker } from './fingerprint.js';
+export {
+  isVital,
+  isError,
+  isUnhandledRejection,
+  isTransition,
+  isCustom,
+  isHistogram,
+  isCounter,
+  isGauge,
+  isTrack,
+} from './guards.js';

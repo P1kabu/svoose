@@ -419,4 +419,61 @@ describe('metric', () => {
       expect(_getPendingEventsCount()).toBe(1);
     });
   });
+
+  describe('dev-mode JSON-serializability check (Bug #6)', () => {
+    // vitest runs in dev mode by default (import.meta.env.DEV === true), so
+    // isDev() returns true here — exercise the dev guard rather than trying
+    // to flip env (Vite gives every module its own import.meta).
+
+    it('throws synchronously when metadata has a circular reference', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      const circular: Record<string, unknown> = { a: 1 };
+      circular.self = circular;
+
+      expect(() => metric('boom', circular)).toThrow(
+        /metric\('boom'\) metadata is not JSON-serializable/,
+      );
+      expect(() => metric('boom', circular)).toThrow(/\$state\.snapshot/);
+      // Pipeline did NOT receive the broken event
+      expect(events).toHaveLength(0);
+    });
+
+    it('does not throw for plain serializable metadata', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      expect(() => metric('ok', { x: 1, y: 'two' })).not.toThrow();
+      expect(events).toHaveLength(1);
+    });
+
+    it('does not throw when user pre-snapshots non-serializable input', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      const circular: Record<string, unknown> = { x: 1 };
+      circular.self = circular;
+      // Simulating $state.snapshot() / structured copy by the user
+      const snapshot = { x: circular.x };
+
+      expect(() => metric('ok', snapshot)).not.toThrow();
+      expect(events).toHaveLength(1);
+    });
+
+    it('error pinpoints the failing metric name', () => {
+      const events: ObserveEvent[] = [];
+      setMetricEmitter((e) => events.push(e));
+
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+
+      try {
+        metric('checkout_started', circular);
+        throw new Error('should have thrown');
+      } catch (err) {
+        expect((err as Error).message).toContain("metric('checkout_started')");
+      }
+    });
+  });
 });

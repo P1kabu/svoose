@@ -86,9 +86,25 @@ export { configurePII } from './observe/index.js';
 export { fingerprint, simpleHash } from './observe/index.js';
 
 // ============================================
+// Type Guards
+// ============================================
+export {
+  isVital,
+  isError,
+  isUnhandledRejection,
+  isTransition,
+  isCustom,
+  isHistogram,
+  isCounter,
+  isGauge,
+  isTrack,
+} from './observe/index.js';
+
+// ============================================
 // Shared Types
 // ============================================
 export type {
+  BaseObserveEvent,
   VitalEvent,
   TransitionEvent,
   CustomMetricEvent,

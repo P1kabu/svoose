@@ -273,24 +273,22 @@ observe({
 
 ---
 
-### Planned
-
 #### v0.1.11 — Privacy Utilities + Error Fingerprinting
 
-**Status**: Planned
-**Target**: March-April 2026
+**Released**: April 2026
 
 | Feature | Description |
 |---------|-------------|
 | **URL Scrubbing** | Remove tokens from URLs (strings + regex) |
 | **Field Masking** | Mask PII (show last 4 characters) |
 | **Custom Sanitizer** | Custom event sanitization callback |
-| **Privacy Options** | stripQueryParams, stripHash |
+| **Privacy Options** | stripQueryParams, stripHash, excludePaths |
 | **configurePII overwrite** | Each call replaces previous config (not merge) |
-| **Error Fingerprinting** | Client-side hash (message + first stack frame) |
+| **Error Fingerprinting** | Client-side hash (message + first stable function name) |
 | **Error Dedup** | Optional window-based deduplication of duplicate errors |
+| **Tech debt fixes** | stats.sent only on successful send; createFetchTransport re-throws after onError |
 
-**Bundle**: ~6.0 KB (+0.1 KB)
+**Bundle**: 8.2 KB full / 6.5 KB observe-only (measured)
 
 ```typescript
 import { observe, configurePII } from 'svoose';
@@ -303,10 +301,50 @@ configurePII({
 observe({
   endpoint: '/api/metrics',
   privacy: { stripQueryParams: true },
+  errors: { dedupe: true, dedupeWindow: 60_000 },
 });
 ```
 
 ---
+
+#### v0.1.12 — DX Hardening (Type Guards + Audit Bug Fixes)
+
+**Released**: May 2026
+
+| Feature | Description |
+|---------|-------------|
+| **Type guards** | `isVital`, `isError`, `isUnhandledRejection`, `isTransition`, `isCustom`, `isHistogram`, `isCounter`, `isGauge`, `isTrack` — fixes the `event.type === 'histogram'` footgun |
+| **Index signature** | `BaseObserveEvent` adds `[key: string]: unknown` to every event variant — `as Record<string, unknown>` works without `as unknown as` |
+| **8 audit bug fixes** | See list below |
+| **Test coverage** | 331 → 376 tests (+45) |
+
+**Bug fixes** (all defensive, non-breaking):
+
+1. `extractFunctionName` now skips only URL fragments and absolute paths, not every name containing `/`
+2. `scrubUrl` preserves path-relative URL shape (no spurious leading slash)
+3. `observe()` ignores async transport resolutions that arrive after `destroy()`
+4. Dev warning + README note when an `observe()` instance is torn down (multi-instance is unsupported)
+5. `privacy.sanitize` callback wrapped in try/catch — a buggy user callback drops the event instead of crashing the pipeline
+6. `metric()` throws a clear error in dev when `metadata` is not JSON-serializable (catches Svelte 5 `$state` proxies before they break batches)
+7. `beacon` transport throws on `sendBeacon() === false` so `observe.flush()` can surface the loss via `onError` + `transportErrors`
+8. `createMachine({ observe: { context: true } })` now actually emits transitions — object form defaults `transitions: true`
+
+**Bundle**: 8.55 KB full / 6.67 KB observe-only (measured, +0.2 KB)
+
+```typescript
+import { observe, isHistogram, isError } from 'svoose';
+
+const obs = observe({ endpoint: '/api/metrics' });
+
+obs.onEvent((event) => {
+  if (isHistogram(event)) console.log(event.value, event.metadata);
+  if (isError(event)) console.warn(event.fingerprint);
+});
+```
+
+---
+
+### Planned
 
 ### v0.2.0 — Production-Ready Observability + Dev Overlay
 
@@ -516,12 +554,12 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 ## Bundle Size Targets
 
-### Current (v0.1.10 measured)
+### Current (v0.1.12 measured)
 
 | Import | Size (gzip) |
 |--------|-------------|
-| `observe()` + vitals + errors + metrics | 5.1 KB |
-| Full bundle (incl. machine, transport) | 6.7 KB |
+| `observe()` + vitals + errors + metrics + privacy + guards | 6.67 KB |
+| Full bundle (incl. machine, transport) | 8.55 KB |
 | `createMachine()` only | 0.95 KB |
 
 ### v0.2.0+ (modular entry points)
@@ -579,9 +617,10 @@ After v1.0.0, svoose enters **maintenance mode**:
 │
 ├── Mar Week 1   v0.1.8 — Beacon + Hybrid Transport
 ├── Mar Week 2   v0.1.9 — API Cleanup (Breaking)
-├── Mar Week 3   v0.1.10 — Retry + DX Foundation ← current
+├── Mar Week 3   v0.1.10 — Retry + DX Foundation
 ├── Mar-Apr      v0.1.11 — Privacy + Error Fingerprinting
-├── Apr          v0.2.0 — Production-Ready + Dev Overlay ⭐
+├── May          v0.1.12 — DX Hardening (type guards + 8 audit fixes) ← current
+├── May-Jun      v0.2.0 — Production-Ready + Dev Overlay ⭐
 │
 ├── May          v0.2.1 — Breadcrumbs
 ├── May          v0.2.2 — Navigation Events + Soft Navigation
@@ -662,6 +701,8 @@ After v1.0.0, svoose enters **maintenance mode**:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-05-06 | 18.0 | v0.1.12 released: DX hardening (9 type guards, BaseObserveEvent index signature) + 8 audit bug fixes (extractFunctionName skip rule, scrubUrl relative URLs, destroyed-flag in observe(), single-instance dev warning, sanitize try/catch, dev-mode JSON.stringify check in metric(), beacon throws on sendBeacon=false, machine observe object form defaults). 376 tests, 8.55KB full / 6.67KB observe-only. |
+| 2026-04-28 | 17.0 | v0.1.11 released: Privacy & Sanitization (configurePII overwrite, sanitize→null DROP, scrubUrl, maskValue, stripQueryParams/Hash, isExcludedPath) + Error Fingerprinting (deploy-resistant) + opt-in dedup. Tech-debt fixes (stats.sent on success only, fetch transport re-throws). |
 | 2026-03-15 | 16.0 | **"Collect + Connect" strategy**: Dev Overlay added to v0.2.0, error fingerprinting added to v0.1.11, DX foundation (getStats/onEvent/flush/destroy) moved to v0.1.10. Grafana template + reference backends planned for v0.2.0. Source maps = docs-only (no implementation). Integration testing plan added. Dashboard package rejected (scope creep, violates philosophy). |
 | 2026-03-15 | 15.0 | Plan sync: Fixed v0.1.11 (overwrite not merge, removed excludeUserAgent), v0.2.0 (offline=in-memory, added flush/rate-limiter/NavigationEvent, removed already-done multi-machine). Added v0.2.1-v0.2.3 roadmap (breadcrumbs, navigation, correlation). Expanded v0.3.0/v0.3.1 SvelteKit plan. |
 | 2026-03-09 | 14.0 | v0.1.9 released: API Cleanup (Breaking). Removed `sampleRate`, `identify` from sampling, `data`→`metadata`, sync console transport, `can()` full event, multi-machine error context, options validation, transport error handling, session storage warning. 206 tests, 5.5KB full. |
