@@ -98,7 +98,14 @@ export {
   isCounter,
   isGauge,
   isTrack,
+  isIdentify,
+  isNavigation,
 } from './observe/index.js';
+
+// ============================================
+// User Identification
+// ============================================
+export { identify } from './observe/index.js';
 
 // ============================================
 // Shared Types
@@ -108,6 +115,8 @@ export type {
   VitalEvent,
   TransitionEvent,
   CustomMetricEvent,
+  IdentifyEvent,
+  NavigationEvent,
   ObserveEvent,
   PIIConfig,
   PrivacyOptions,

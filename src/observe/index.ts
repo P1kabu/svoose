@@ -41,4 +41,7 @@ export {
   isCounter,
   isGauge,
   isTrack,
+  isIdentify,
+  isNavigation,
 } from './guards.js';
+export { identify, getUserContext } from './user.js';

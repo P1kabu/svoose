@@ -43,6 +43,7 @@ const regularEntryPoints = [
   'src/observe/privacy.ts',
   'src/observe/fingerprint.ts',
   'src/observe/guards.ts',
+  'src/observe/user.ts',
   'src/metrics/index.ts',
   'src/metrics/metric.ts',
   'src/metrics/typed.ts',
@@ -81,8 +82,8 @@ await esbuild.build({
 console.log('\n📊 Bundle sizes:');
 
 const files = [
-  { name: 'Full bundle', paths: ['dist/index.js', 'dist/observe/index.js', 'dist/observe/observe.svelte.js', 'dist/observe/vitals.js', 'dist/observe/errors.js', 'dist/observe/sampling.js', 'dist/observe/session.js', 'dist/observe/presets.js', 'dist/observe/privacy.js', 'dist/observe/fingerprint.js', 'dist/metrics/index.js', 'dist/metrics/metric.js', 'dist/metrics/typed.js', 'dist/machine/index.js', 'dist/machine/machine.svelte.js', 'dist/machine/types.js', 'dist/svelte/index.svelte.js', 'dist/transport/index.js', 'dist/transport/fetch.js', 'dist/transport/beacon.js', 'dist/transport/hybrid.js', 'dist/transport/retry.js', 'dist/transport/transport.js', 'dist/types/index.js'] },
-  { name: 'observe() only', paths: ['dist/observe/observe.svelte.js', 'dist/observe/vitals.js', 'dist/observe/errors.js', 'dist/observe/sampling.js', 'dist/observe/session.js', 'dist/observe/privacy.js', 'dist/observe/fingerprint.js', 'dist/metrics/metric.js', 'dist/transport/fetch.js', 'dist/transport/beacon.js', 'dist/transport/hybrid.js', 'dist/transport/retry.js'] },
+  { name: 'Full bundle', paths: ['dist/index.js', 'dist/observe/index.js', 'dist/observe/observe.svelte.js', 'dist/observe/vitals.js', 'dist/observe/errors.js', 'dist/observe/sampling.js', 'dist/observe/session.js', 'dist/observe/presets.js', 'dist/observe/privacy.js', 'dist/observe/fingerprint.js', 'dist/observe/user.js', 'dist/metrics/index.js', 'dist/metrics/metric.js', 'dist/metrics/typed.js', 'dist/machine/index.js', 'dist/machine/machine.svelte.js', 'dist/machine/types.js', 'dist/svelte/index.svelte.js', 'dist/transport/index.js', 'dist/transport/fetch.js', 'dist/transport/beacon.js', 'dist/transport/hybrid.js', 'dist/transport/retry.js', 'dist/transport/transport.js', 'dist/types/index.js'] },
+  { name: 'observe() only', paths: ['dist/observe/observe.svelte.js', 'dist/observe/vitals.js', 'dist/observe/errors.js', 'dist/observe/sampling.js', 'dist/observe/session.js', 'dist/observe/privacy.js', 'dist/observe/fingerprint.js', 'dist/observe/user.js', 'dist/metrics/metric.js', 'dist/transport/fetch.js', 'dist/transport/beacon.js', 'dist/transport/hybrid.js', 'dist/transport/retry.js'] },
   { name: 'createMachine() only', paths: ['dist/machine/machine.svelte.js', 'dist/machine/types.js'] },
 ];
 

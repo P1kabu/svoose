@@ -20,6 +20,8 @@ import type {
   UnhandledRejectionEvent,
   TransitionEvent,
   CustomMetricEvent,
+  IdentifyEvent,
+  NavigationEvent,
 } from '../types/index.js';
 
 export function isVital(event: ObserveEvent): event is VitalEvent {
@@ -64,4 +66,12 @@ export function isTrack(
   event: ObserveEvent,
 ): event is CustomMetricEvent & { metricKind: undefined } {
   return event.type === 'custom' && (event as CustomMetricEvent).metricKind === undefined;
+}
+
+export function isIdentify(event: ObserveEvent): event is IdentifyEvent {
+  return event.type === 'identify';
+}
+
+export function isNavigation(event: ObserveEvent): event is NavigationEvent {
+  return event.type === 'navigation';
 }

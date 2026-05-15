@@ -24,6 +24,8 @@ describe('sampling', () => {
         expect(sampler.getRate('errors')).toBe(0.5);
         expect(sampler.getRate('custom')).toBe(0.5);
         expect(sampler.getRate('transitions')).toBe(0.5);
+        expect(sampler.getRate('identify')).toBe(0.5);
+        expect(sampler.getRate('navigation')).toBe(0.5);
       });
 
       it('should handle rate of 0 (disabled)', () => {
@@ -83,6 +85,8 @@ describe('sampling', () => {
         expect(sampler.getRate('errors')).toBe(1); // default
         expect(sampler.getRate('custom')).toBe(1); // default
         expect(sampler.getRate('transitions')).toBe(1); // default
+        expect(sampler.getRate('identify')).toBe(1); // default
+        expect(sampler.getRate('navigation')).toBe(1); // default
       });
     });
 
@@ -150,6 +154,14 @@ describe('sampling', () => {
 
     it('should map transition to transitions', () => {
       expect(eventTypeToSamplingType('transition')).toBe('transitions');
+    });
+
+    it('should map identify to identify', () => {
+      expect(eventTypeToSamplingType('identify')).toBe('identify');
+    });
+
+    it('should map navigation to navigation', () => {
+      expect(eventTypeToSamplingType('navigation')).toBe('navigation');
     });
 
     it('should return null for unknown types', () => {

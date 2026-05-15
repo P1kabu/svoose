@@ -5,6 +5,8 @@ import type {
   UnhandledRejectionEvent,
   TransitionEvent,
   CustomMetricEvent,
+  IdentifyEvent,
+  NavigationEvent,
   ObserveEvent,
 } from '../src/types/index.js';
 
@@ -251,6 +253,81 @@ describe('event format stability', () => {
     });
   });
 
+  describe('IdentifyEvent', () => {
+    const login: IdentifyEvent = {
+      type: 'identify',
+      userId: 'user_123',
+      traits: { plan: 'premium' },
+      timestamp,
+    };
+
+    it('login event should have stable field names', () => {
+      expect(Object.keys(login).sort()).toEqual([
+        'timestamp', 'traits', 'type', 'userId',
+      ]);
+    });
+
+    it('login event should serialize to valid JSON', () => {
+      const parsed = JSON.parse(JSON.stringify(login));
+      expect(parsed).toEqual(login);
+    });
+
+    it('logout event should carry previousUserId and userId=null', () => {
+      const logout: IdentifyEvent = {
+        type: 'identify',
+        userId: null,
+        previousUserId: 'user_123',
+        timestamp,
+      };
+      const parsed = JSON.parse(JSON.stringify(logout));
+      expect(parsed.userId).toBeNull();
+      expect(parsed.previousUserId).toBe('user_123');
+      expect(parsed.traits).toBeUndefined();
+    });
+
+    it('should support optional sessionId', () => {
+      const withSession: IdentifyEvent = { ...login, sessionId: 'sess-1' };
+      const parsed = JSON.parse(JSON.stringify(withSession));
+      expect(parsed.sessionId).toBe('sess-1');
+    });
+  });
+
+  describe('NavigationEvent', () => {
+    const event: NavigationEvent = {
+      type: 'navigation',
+      from: '/home',
+      to: '/dashboard',
+      navigationType: 'soft',
+      timestamp,
+    };
+
+    it('should have stable required field names', () => {
+      expect(Object.keys(event).sort()).toEqual([
+        'from', 'navigationType', 'timestamp', 'to', 'type',
+      ]);
+    });
+
+    it('should serialize to valid JSON', () => {
+      const parsed = JSON.parse(JSON.stringify(event));
+      expect(parsed).toEqual(event);
+    });
+
+    it('should accept all valid navigationType values', () => {
+      const kinds: NavigationEvent['navigationType'][] = ['hard', 'soft', 'back', 'forward'];
+      for (const kind of kinds) {
+        const e: NavigationEvent = { ...event, navigationType: kind };
+        expect(e.navigationType).toBe(kind);
+      }
+    });
+
+    it('should support optional duration + sessionId', () => {
+      const withExtras: NavigationEvent = { ...event, duration: 142, sessionId: 'sess-1' };
+      const parsed = JSON.parse(JSON.stringify(withExtras));
+      expect(parsed.duration).toBe(142);
+      expect(parsed.sessionId).toBe('sess-1');
+    });
+  });
+
   describe('ObserveEvent union', () => {
     it('should distinguish event types by type field', () => {
       const events: ObserveEvent[] = [
@@ -259,10 +336,14 @@ describe('event format stability', () => {
         { type: 'unhandled-rejection', reason: 'test', timestamp, url: '/' },
         { type: 'transition', machineId: 'x', from: 'a', to: 'b', event: 'E', timestamp },
         { type: 'custom', name: 'test', timestamp },
+        { type: 'identify', userId: 'u1', timestamp },
+        { type: 'navigation', from: '/', to: '/x', navigationType: 'soft', timestamp },
       ];
 
       const types = events.map(e => e.type);
-      expect(types).toEqual(['vital', 'error', 'unhandled-rejection', 'transition', 'custom']);
+      expect(types).toEqual([
+        'vital', 'error', 'unhandled-rejection', 'transition', 'custom', 'identify', 'navigation',
+      ]);
     });
 
     it('should all have type and timestamp fields', () => {
@@ -272,6 +353,8 @@ describe('event format stability', () => {
         { type: 'unhandled-rejection', reason: 'test', timestamp, url: '/' },
         { type: 'transition', machineId: 'x', from: 'a', to: 'b', event: 'E', timestamp },
         { type: 'custom', name: 'test', timestamp },
+        { type: 'identify', userId: 'u1', timestamp },
+        { type: 'navigation', from: '/', to: '/x', navigationType: 'soft', timestamp },
       ];
 
       for (const event of events) {

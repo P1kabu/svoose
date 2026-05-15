@@ -344,6 +344,32 @@ obs.onEvent((event) => {
 
 ---
 
+#### v0.1.13 — Identity + NavigationEvent Type Stub
+
+**Released**: May 2026
+
+| Feature | Description |
+|---------|-------------|
+| **`identify()`** | Records the current user; emits `IdentifyEvent` on login/logout and injects `userId`/`userTraits` into every subsequent event |
+| **`IdentifyEvent`** | New event variant in `ObserveEvent` union; logout carries `previousUserId` |
+| **`NavigationEvent` type stub** | Type-only — exhaustive `switch (event.type)` consumers stay compatible when v0.3.0 (SvelteKit `afterNavigate`) starts emitting these |
+| **Sampling** | `sampling.identify` and `sampling.navigation` added to `SamplingConfig` (defaults `1.0`) |
+| **Type guards** | `isIdentify`, `isNavigation` |
+
+```typescript
+import { observe, identify } from 'svoose';
+
+observe({ endpoint: '/api/metrics' });
+
+// Login
+identify({ id: 'user_123', traits: { plan: 'premium' } });
+
+// Logout — emits IdentifyEvent with userId: null, previousUserId: 'user_123'
+identify(null);
+```
+
+---
+
 ### Planned
 
 ### v0.2.0 — Production-Ready Observability + Dev Overlay
@@ -359,12 +385,10 @@ obs.onEvent((event) => {
 
 | Feature | Description |
 |---------|-------------|
-| **Network Detection** | Pause/resume on offline/online |
-| **Offline Queue** | In-memory queue with FIFO eviction |
-| **User Identification** | `identify()` for analytics |
+| **Network Detection** | Pause/resume on offline/online (lands in v0.1.14) |
+| **Offline Queue** | In-memory queue with FIFO eviction (lands in v0.1.14) |
+| **Rate Limiter** | `maxEventsPerSecond` circuit breaker (lands in v0.1.14) |
 | **Bundle Restructure** | Modular entry points for tree-shaking |
-| **Rate Limiter** | `maxEventsPerSecond` circuit breaker |
-| **NavigationEvent type** | Type stub for future SvelteKit route tracking |
 | **Dev Overlay** | `svoose/devtools` — real-time vitals, errors, stats in browser |
 | **Grafana template** | JSON dashboard template for import |
 | **Reference backends** | Example repos (SvelteKit+SQLite, Express+PostgreSQL) |

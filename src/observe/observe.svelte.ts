@@ -12,6 +12,7 @@ import {
 } from './sampling.js';
 import { createSessionManager, type SessionManager } from './session.js';
 import { setMetricEmitter, getMetricEmitter } from '../metrics/metric.js';
+import { setIdentifyEmitter, getIdentifyEmitter, getUserContext } from './user.js';
 import { sanitizeEvent } from './privacy.js';
 import { fingerprint as computeFingerprint, createDedupTracker, type DedupTracker } from './fingerprint.js';
 import type {
@@ -215,10 +216,18 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
       }
     }
 
-    // 6. Add sessionId if session manager is enabled
+    // 6. Inject sessionId + userId/userTraits.
     if (sessionManager) {
       // All event types have optional sessionId, safe to assign
       (event as { sessionId?: string }).sessionId = sessionManager.getSessionId();
+    }
+    // IdentifyEvent carries explicit userId (incl. `null` on logout) — never
+    // overwrite it. For everything else, attach the current user if we have one.
+    const user = getUserContext();
+    if (user && event.type !== 'identify' && (event as { userId?: unknown }).userId === undefined) {
+      const enriched = event as { userId?: string; userTraits?: Record<string, unknown> };
+      enriched.userId = user.userId;
+      if (user.userTraits) enriched.userTraits = user.userTraits;
     }
 
     if (config.debug) {
@@ -340,6 +349,14 @@ export function observe(options: ObserveOptions = {}): ObserveInstance {
     // Only clear if we're still the active emitter
     if (getMetricEmitter() === bufferEvent) {
       setMetricEmitter(null);
+    }
+  });
+
+  // Setup identify emitter so identify() can route IdentifyEvents through the pipeline
+  setIdentifyEmitter(bufferEvent);
+  cleanups.push(() => {
+    if (getIdentifyEmitter() === bufferEvent) {
+      setIdentifyEmitter(null);
     }
   });
 

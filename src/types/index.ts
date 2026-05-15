@@ -109,10 +109,59 @@ export interface CustomMetricEvent extends BaseObserveEvent {
 }
 
 // ============================================
+// Identify Event (user identification)
+// ============================================
+
+/**
+ * Emitted by `identify()` on login (with `userId` set) and logout
+ * (with `userId: null` and `previousUserId` set to the prior id).
+ */
+export interface IdentifyEvent extends BaseObserveEvent {
+  type: 'identify';
+  /** Current user id, or `null` to signal logout. */
+  userId: string | null;
+  /** Optional traits attached at login. Absent on logout events. */
+  traits?: Record<string, unknown>;
+  /** Set only on logout events — the id that was just cleared. */
+  previousUserId?: string;
+  timestamp: number;
+  sessionId?: string;
+}
+
+// ============================================
+// Navigation Event (type stub — runtime in v0.3.0 SvelteKit)
+// ============================================
+
+/**
+ * Page navigation event. The runtime emitter lands in v0.3.0 (SvelteKit
+ * `afterNavigate`); the type is exported now so downstream `switch (event.type)`
+ * exhaustive checks don't break when v0.3.0 starts emitting these.
+ */
+export interface NavigationEvent extends BaseObserveEvent {
+  type: 'navigation';
+  /** Previous URL/pathname (matches SvelteKit `afterNavigate` shape). */
+  from: string;
+  /** Current URL/pathname. */
+  to: string;
+  /** Hard reload, SPA navigation, or browser back/forward. */
+  navigationType: 'hard' | 'soft' | 'back' | 'forward';
+  /** Navigation timing in ms (filled when the platform exposes it). */
+  duration?: number;
+  timestamp: number;
+  sessionId?: string;
+}
+
+// ============================================
 // Union Event Type
 // ============================================
 
-export type ObserveEvent = VitalEvent | ObserveErrorEvent | TransitionEvent | CustomMetricEvent;
+export type ObserveEvent =
+  | VitalEvent
+  | ObserveErrorEvent
+  | TransitionEvent
+  | CustomMetricEvent
+  | IdentifyEvent
+  | NavigationEvent;
 
 // ============================================
 // Transport Types
@@ -210,6 +259,10 @@ export interface SamplingConfig {
   custom?: number;
   /** Sampling rate for state machine transition events (default: 1) */
   transitions?: number;
+  /** Sampling rate for identify events (default: 1) */
+  identify?: number;
+  /** Sampling rate for navigation events (default: 1) — fires once v0.3.0 emits navigations */
+  navigation?: number;
 }
 
 /**

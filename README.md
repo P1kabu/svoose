@@ -820,6 +820,40 @@ observe({
 
 Within the window, repeats of the same fingerprint are dropped (`stats.dropped++`). The window timestamp is **refreshed on every hit**, so a continuous burst of the same error stays suppressed until the source actually goes quiet for `dedupeWindow` milliseconds — only then does the next occurrence pass again.
 
+## User Identification
+
+`identify()` records the current user so every subsequent event picked up by the pipeline carries `userId` (and optional `userTraits`) for downstream correlation. It also emits a discrete `IdentifyEvent` on login/logout transitions.
+
+```typescript
+import { observe, identify } from 'svoose';
+
+observe({ endpoint: '/api/metrics' });
+
+// Login
+identify({ id: 'user_123', traits: { plan: 'premium' } });
+
+// Logout — emits an IdentifyEvent with userId: null and previousUserId: 'user_123'
+identify(null);
+```
+
+After `identify({ id })`, every subsequent event is enriched:
+
+```typescript
+{
+  type: 'vital',
+  name: 'LCP',
+  /* ... */
+  userId: 'user_123',
+  userTraits: { plan: 'premium' },
+}
+```
+
+`IdentifyEvent` itself flows through the pipeline (privacy, filter, sampling, session, listeners) — sanitize callbacks and `maskFields` apply to it like any other event. Sampling is configurable via `sampling.identify` (default `1.0`).
+
+### `NavigationEvent` — type only in v0.1.13
+
+`NavigationEvent` is exported as a type now so exhaustive `switch (event.type)` consumers don't break when v0.3.0 (SvelteKit `afterNavigate`) starts emitting these. There is no runtime emitter yet — the type's `from`/`to`/`navigationType` shape is locked so backend schemas can be designed against it today.
+
 ## Svelte 5 Usage
 
 ### Reactive State Machines
@@ -959,8 +993,7 @@ svoose is best for: lightweight self-hosted observability where you control the 
 
 ## Roadmap
 
-- **v0.1.3–v0.1.12** — Released (sampling, sessions, custom metrics, beacon/hybrid transport, API cleanup, retry, DX foundation, privacy + error fingerprinting, type guards + 8 audit bug fixes)
-- **v0.1.13** — Identity (`identify()`) + `NavigationEvent` type stub (planned)
+- **v0.1.3–v0.1.13** — Released (sampling, sessions, custom metrics, beacon/hybrid transport, API cleanup, retry, DX foundation, privacy + error fingerprinting, type guards + 8 audit bug fixes, `identify()` + `NavigationEvent` type stub)
 - **v0.1.14** — Production Hardening: rate limiter (`maxEventsPerSecond`) + offline queue (planned)
 - **v0.1.15** — `createMachine` TypeScript inference fix (planned)
 - **v0.2.0** — Dev Overlay (`svoose/devtools`) + OTLP/Loki/Multi transport adapters + Grafana template (planned)
